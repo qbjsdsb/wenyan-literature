@@ -1,0 +1,20 @@
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 依赖（若后续引入构建工具）
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# 构建产物
+dist/
+build/
+
+# 本地环境
+.env
+.env.local
