@@ -70,18 +70,15 @@ PR #11 合并前已经通过：
 
 ## 当前下一步
 
-现在不继续堆新训练模式。
+当前运行版仍是本地桌面英语v1。Smart Session / English Experience v2 在 [Draft PR #12](https://github.com/qbjsdsb/wenyan-literature/pull/12)，已通过其最新CI/浏览器矩阵，尚未合并。
 
-顺序固定为：
-1. **提供固定电脑端访问入口。**
-2. 开始连续真实使用，让学习记录在稳定 origin 下长期积累。
-3. 下一个优先功能：**快速筛词**，用真实个人判断淘汰已经掌握的基础词，而不是再写硬编码黑名单。
-4. 再根据真实数据决定：到期排序、session 日志压缩、长期性能优化。
-5. 只有出现真实多电脑需求时才做单人薄同步。
-6. 再做反复错词 / 高频难词语境强化。
-7. 最后恢复文学。
+[Draft PR #13](https://github.com/qbjsdsb/wenyan-literature/pull/13) 只研究下一阶段：**静态Wenyan + IndexedDB本地即时保存 + Supabase长期事实/Auth + 只读Wenyan MCP + ChatGPT推理**。没有实现云端、安装插件或发布。
 
-当前不维护 Android / iOS 专项体验。
+用户尚未开始正式使用，没有需要迁移的真实学习历史。schema 2不作为永久协议；云基础允许有理由的一次升级，保留Smart Session、FSRS、稳定word ID、首次结果与JSON备份。
+
+顺序：英语体验收口 → 云基础与学习状态 → 多电脑/离线/备份 → 固定正式入口 → 只读MCP/个人Plugin → 按需可逆写入 → 真题与有证据的Learner Model。文学与手机专项冻结。
+
+理由与来源见 [云端与MCP研究](docs/research/CLOUD-MCP.md)，完成标准见 [ROADMAP](docs/ROADMAP.md)。不新增网站AI聊天框，不自建OAuth，不让ChatGPT拥有学习事实。
 
 ## 接手顺序
 
@@ -93,7 +90,7 @@ PR #11 合并前已经通过：
 6. [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)
 7. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-从 `main` 开始新工作，不要再从 PR #2—#10 旧链续接。
+新工作先核对远端 `main` 与进行中的 #12 / #13；两者独立，不粗暴覆盖。不要从 PR #2—#10 旧链续接。
 
 ## 运行
 
@@ -115,7 +112,7 @@ npm run build
 
 个人学习状态当前保存在浏览器 localStorage，核心事件键为 `wenyan-events-v2`。
 
-稳定边界：
+当前运行版保护的边界（下一阶段存储协议可按明确设计升级）：
 - 稳定事件 ID。
 - `word:<规范化英文单词>`。
 - 收藏 / 已掌握事件语义。
@@ -124,7 +121,7 @@ npm run build
 - JSON 备份兼容。
 - `ts-fsrs` 历史。
 
-每次学习动作先写本机。手动 JSON 导入 / 导出继续作为重要兜底。
+每次学习动作先写本机。JSON导入/导出长期保留。下一阶段云权威与本地outbox尚未实现；不把“本机已存”称为“已同步”。真实学习数据与secret不进入公共Git。
 
 ## 第三方数据
 
