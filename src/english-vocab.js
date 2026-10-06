@@ -43,6 +43,7 @@ let activeLayer = readLayer();
 export const vocabularyMeta = {
   status: 'loading',
   active: words.length,
+  compatibility: 0,
   carryover: 0,
   total: words.length,
   sourceCount: words.length,
@@ -98,14 +99,16 @@ function activate(nextCatalog, {
   if (!isCompleteCatalog(nextCatalog)) return false;
   catalog = nextCatalog;
   const enriched = lexiconPayload ? applyLexiconEnrichment(catalog, lexiconPayload) : catalog;
-  const baseActive = selectActiveCatalog(enriched, seedWords, activeLayer);
+  const layerSize = englishLayerLimit(activeLayer, enriched.length);
+  const compatibleActive = selectActiveCatalog(enriched, seedWords, activeLayer);
   const pendingIds = globalThis.__wenyanActiveEnglishSessionIds?.() ?? [];
   const active = selectActiveCatalog(enriched, seedWords, activeLayer, pendingIds).map(withRuntimeFields);
   words.splice(0, words.length, ...active);
   Object.assign(vocabularyMeta, {
     status: 'ready',
-    active: baseActive.length,
-    carryover: Math.max(0, active.length - baseActive.length),
+    active: layerSize,
+    compatibility: Math.max(0, compatibleActive.length - layerSize),
+    carryover: Math.max(0, active.length - compatibleActive.length),
     total: catalog.length,
     sourceCount,
     source,
@@ -179,8 +182,12 @@ function decorateEnglishPage() {
   const newLimit = page.querySelector('#new-limit')?.closest('label');
 
   if (badge) {
+    const extras = [
+      vocabularyMeta.compatibility ? `兼容保留${vocabularyMeta.compatibility}词` : '',
+      vocabularyMeta.carryover ? `续学保留${vocabularyMeta.carryover}词` : ''
+    ].filter(Boolean);
     badge.textContent = vocabularyMeta.status === 'ready'
-      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词${vocabularyMeta.carryover ? ` · 续学保留${vocabularyMeta.carryover}词` : ''}`
+      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词${extras.length ? ` · ${extras.join(' · ')}` : ''}`
       : `兼容词组 · ${words.length}词`;
   }
 
