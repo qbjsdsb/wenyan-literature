@@ -1,5 +1,7 @@
 // Inspect actual IndexedDB; no production dual-write compatibility mirror.
+export const settled=page=>page.waitForFunction(()=>document.querySelector('#app')?.getAttribute('aria-busy')!=='true');
 export async function readDatabase(page,scope='baseline'){
+ await settled(page);
  return page.evaluate(async name=>{
   const db=await new Promise((res,rej)=>{const req=indexedDB.open('wenyan-'+name+':wenyan-v3');req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});
   const tx=db.transaction(['facts','checkpoints'],'readonly');const all=s=>new Promise((res,rej)=>{const r=tx.objectStore(s).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});

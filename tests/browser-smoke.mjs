@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {readDatabase,waitIndex,resetScope} from './browser-storage.mjs';
+import {readDatabase,settled,waitIndex,resetScope} from './browser-storage.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = process.env.WENYAN_BASE_URL || 'http://127.0.0.1:4173/';
@@ -42,12 +42,12 @@ async function freshPage(context, scope = 'baseline', hash = 'english') {
 async function openOptions(page) {
   if (!(await page.locator('.learning-options').getAttribute('open'))) {
     // An open boolean attribute serializes to an empty string.
-    if (!(await page.locator('#new-limit').isVisible())) await page.locator('.learning-options summary').click();
+    if (!(await page.locator('#new-limit').isVisible())) await page.locator('.learning-options summary').click(); await settled(page);
   }
 }
 async function chooseLayer(page, layer) {
   await openOptions(page);
-  await page.locator('#vocab-layer').selectOption(layer);
+  await page.locator('#vocab-layer').selectOption(layer); await settled(page);
   await page.waitForFunction(layer => window.__wenyanVocabularyMeta?.layer === layer, layer);
   assert.equal(await page.locator('#vocab-layer').evaluate(el => document.activeElement === el), true, '切层后保持配置键盘焦点');
 }
@@ -55,10 +55,10 @@ async function startMode(page, mode, newLimit = '6') {
   await page.goto(`${baseUrl}?test=baseline#english`, { waitUntil: 'domcontentloaded' });
   await waitVocabulary(page);
   await openOptions(page);
-  await page.locator('#new-limit').selectOption(newLimit);
-  await page.locator('.free-practice summary').click();
-  await page.locator(`[data-action="mode"][data-mode="${mode}"]`).click();
-  await page.locator('[data-action="start-words"]').click();
+  await page.locator('#new-limit').selectOption(newLimit); await settled(page);
+  await page.locator('.free-practice summary').click(); await settled(page);
+  await page.locator(`[data-action="mode"][data-mode="${mode}"]`).click(); await settled(page);
+  await page.locator('[data-action="start-words"]').click(); await settled(page);
   await page.waitForURL(/#train$/);
   await page.locator('#word-input').waitFor();
   const session = await readSession(page);
@@ -105,11 +105,11 @@ try {
   await page.waitForFunction(() => window.__wenyanVocabularyMeta?.layer === 'full');
   assert.equal((await waitVocabulary(page)).active, 5528);
 
-  await page.locator('[data-action="search"]').first().click();
+  await page.locator('[data-action="search"]').first().click(); await settled(page);
   await page.locator('#search-input').fill(lowestRankWord.word);
   const fullSearchText = await page.locator('#search-results').innerText();
   assert.ok(fullSearchText.toLowerCase().includes(lowestRankWord.word.toLowerCase()), '完整层应能搜到最低频词');
-  await page.locator('[data-action="close-panel"]').click();
+  await page.locator('[data-action="close-panel"]').click(); await settled(page);
 
   await chooseLayer(page, 'core');
   await startMode(page, 'recall');
@@ -120,11 +120,11 @@ try {
   assert.ok(firstWord, '训练词必须来自固定词库');
 
   await page.locator('#word-input').fill('zzzz-not-the-word');
-  await page.locator('#word-form').press('Enter');
+  await page.locator('#word-form').press('Enter'); await settled(page);
   assert.match(await page.locator('#input-feedback').innerText(), /拼写需要订正/);
   await page.locator('#word-input').fill(firstWord.word);
-  await page.locator('#word-form').press('Enter');
-  await page.locator('[data-action="word-rate"][data-rating="1"]').click();
+  await page.locator('#word-form').press('Enter'); await settled(page);
+  await page.locator('[data-action="word-rate"][data-rating="1"]').click(); await settled(page);
   await page.locator('#word-input').waitFor();
 
   session = await readSession(page);
@@ -136,7 +136,7 @@ try {
   session = await readSession(page);
   assert.equal(session.index, savedIndex, '刷新后应继续同一未完成词组');
 
-  await page.locator('[data-action="hint"]').click();
+  await page.locator('[data-action="hint"]').click(); await settled(page);
   session = await readSession(page);
   assert.equal(session.current?.hinted, true, '点击提示应立即持久化 hinted');
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -144,18 +144,18 @@ try {
   session = await readSession(page);
   assert.equal(session.current?.hinted, true, '刷新后 hinted 不应丢失');
 
-  await page.locator('[data-action="exit-training"]').click();
+  await page.locator('[data-action="exit-training"]').click(); await settled(page);
   await page.waitForURL(/#english$/);
   await page.locator('[data-action="resume-words"]').waitFor();
   assert.equal(await page.locator('[data-action="start-words"]').count(), 0, '有未完成组时不应出现新的智能开始按钮');
-  await page.locator('[data-action="resume-words"]').click();
+  await page.locator('[data-action="resume-words"]').click(); await settled(page);
   await page.locator('#word-input').waitFor();
   session = await readSession(page);
   assert.equal(session.index, savedIndex, '继续上次不能覆盖当前训练组');
 
-  await page.locator('[data-action="exit-training"]').click();
-  await page.locator('[data-action="settings"]').first().click();
-  await page.locator('[data-action="export"]').click();
+  await page.locator('[data-action="exit-training"]').click(); await settled(page);
+  await page.locator('[data-action="settings"]').first().click(); await settled(page);
+  await page.locator('[data-action="export"]').click(); await settled(page);
   const backupText = await page.locator('#backup-text').inputValue();
   const backup = JSON.parse(backupText);
   assert.ok(Array.isArray(backup.events) && backup.events.length > 0, '浏览器导出应包含学习事件');
@@ -163,16 +163,16 @@ try {
   // Import the real exported backup into a clean browser context and resume it.
   const importContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const importPage = await freshPage(importContext);
-  await importPage.locator('[data-action="settings"]').first().click();
-  await importPage.locator('[data-action="import-text"]').click();
+  await importPage.locator('[data-action="settings"]').first().click(); await settled(importPage);
+  await importPage.locator('[data-action="import-text"]').click(); await settled(importPage);
   await importPage.locator('#import-text').fill(backupText);
-  await importPage.locator('[data-action="import-pasted"]').click();
+  await importPage.locator('[data-action="import-pasted"]').click(); await settled(importPage);
   await importPage.locator('#panel').waitFor({state:'hidden'});
   const importedEvents = await readEvents(importPage);
   assert.ok(importedEvents.length >= backup.events.length, '导入后应恢复备份中的全部事件');
   const importedSession = await readSession(importPage);
   assert.equal(importedSession?.index, savedIndex, '导入后应恢复未完成 session 位置');
-  await importPage.locator('[data-action="resume-words"]').click();
+  await importPage.locator('[data-action="resume-words"]').click(); await settled(importPage);
   await importPage.locator('#word-input').waitFor();
   assert.equal((await readSession(importPage)).index, savedIndex, '导入后应能真正继续未完成训练');
   await importContext.close();
