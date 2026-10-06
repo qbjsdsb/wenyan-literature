@@ -59,6 +59,7 @@ async function chooseLayer(page, layer) {
   await openOptions(page);
   await page.locator('#vocab-layer').selectOption(layer);
   await page.waitForFunction(layer => window.__wenyanVocabularyMeta?.layer === layer, layer);
+  assert.equal(await page.locator('#vocab-layer').evaluate(el => document.activeElement === el), true, '切层后保持配置键盘焦点');
 }
 async function startMode(page, mode, newLimit = '6') {
   await page.goto(`${baseUrl}?test=baseline#english`, { waitUntil: 'domcontentloaded' });

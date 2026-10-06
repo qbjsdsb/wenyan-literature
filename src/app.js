@@ -276,7 +276,7 @@ const actions={
 document.addEventListener('click',e=>{if(e.target.closest('.skip-link')){e.preventDefault();$('#main').focus();return;}const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions[el.dataset.action]?.(el);}if(e.target.closest('#panel a[href^="#"]'))panel.close();});
 document.addEventListener('change',async e=>{
  const el=e.target;
- if(el.id==='vocab-layer'){changeEnglishLayer(el.value);return;}
+ if(el.id==='vocab-layer'){changeEnglishLayer(el.value);if($('.learning-options')){$('.learning-options').open=true;$('#vocab-layer').focus();}return;}
  if(el.id==='new-limit'){newWordLimit=Number(el.value);preference('wenyan-english-new-limit',newWordLimit);english();$('.learning-options').open=true;$('#new-limit').focus();return;}
  if(el.id==='theme'){theme=el.value;preference('wenyan-theme',theme);applyTheme();}if(el.id==='voice'){autoVoice=el.checked;preference('wenyan-voice',autoVoice?'on':'off');}
  if(el.id==='reading-family'){readingFamily=el.value;preference('wenyan-reading-family',readingFamily);applyTheme();}if(el.id==='line-height'){lineHeight=Number(el.value);preference('wenyan-line-height',lineHeight);applyTheme();}
