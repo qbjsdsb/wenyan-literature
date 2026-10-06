@@ -23,6 +23,9 @@ main为桌面英语v1；#12是未合并的Smart Session/Experience v2；#13是�
 
 ## 文档分类
 
+### 云基础实施
+- [cloud-implementation.md](cloud-implementation.md)：IDB/RPC/同步协议、配置与可复现验收；当前状态仍只看开发进度。
+
 ### 状态与验收
 - [`开发进度.md`](开发进度.md)：当前分支、已完成、未验证、下一动作。
 - [`english/VALIDATION.md`](english/VALIDATION.md)：当前桌面真实使用验收。

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {readDatabase,waitIndex,resetScope} from './browser-storage.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = process.env.WENYAN_BASE_URL || 'http://127.0.0.1:4173/';
@@ -19,26 +20,15 @@ async function readJson(page, scope, key, fallback = null) {
   }, { storageKey: scopedKey(scope, key), fallback });
 }
 
-async function readSession(page, scope = 'baseline') {
-  return readJson(page, scope, 'wenyan-session');
-}
-
-async function readEvents(page, scope = 'baseline') {
-  return readJson(page, scope, 'wenyan-events-v2', []);
-}
+async function readSession(page,scope='baseline'){return (await readDatabase(page,scope)).session;}
+async function readEvents(page,scope='baseline'){return (await readDatabase(page,scope)).events;}
 
 async function waitVocabulary(page) {
   await page.waitForFunction(() => window.__wenyanVocabularyMeta?.status === 'ready');
   return page.evaluate(() => window.__wenyanVocabularyMeta);
 }
 
-async function clearScope(page, scope) {
-  await page.evaluate(prefix => {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(prefix)) localStorage.removeItem(key);
-    }
-  }, `wenyan-${scope}:`);
-}
+async function clearScope(page,scope){await resetScope(page,scope);}
 
 async function freshPage(context, scope = 'baseline', hash = 'english') {
   const page = await context.newPage();
@@ -86,12 +76,7 @@ async function completeFollowWords(page, count) {
     const word = byId.get(session.queue[index]);
     assert.ok(word, `应找到训练词 ${session.queue[index]}`);
     await page.locator('#word-input').fill(word.word);
-    await page.waitForFunction(({ key, index }) => {
-      const raw = localStorage.getItem(key);
-      if (!raw) return false;
-      const current = JSON.parse(raw);
-      return current.index > index;
-    }, { key: scopedKey('baseline', 'wenyan-session'), index });
+    await waitIndex(page,index);
     completed += 1;
     if (completed < count) await page.locator('#word-input').waitFor();
   }
@@ -182,10 +167,7 @@ try {
   await importPage.locator('[data-action="import-text"]').click();
   await importPage.locator('#import-text').fill(backupText);
   await importPage.locator('[data-action="import-pasted"]').click();
-  await importPage.waitForFunction(key => {
-    const events = JSON.parse(localStorage.getItem(key) || '[]');
-    return events.length > 0;
-  }, scopedKey('baseline', 'wenyan-events-v2'));
+  await importPage.locator('#panel').waitFor({state:'hidden'});
   const importedEvents = await readEvents(importPage);
   assert.ok(importedEvents.length >= backup.events.length, '导入后应恢复备份中的全部事件');
   const importedSession = await readSession(importPage);
@@ -206,6 +188,7 @@ try {
     results: [],
     startedAt: Date.now()
   };
+  await resetScope(restorePage,'baseline-restore');
   await restorePage.evaluate(({ sessionKey, layerKey, seededSession }) => {
     localStorage.setItem(sessionKey, JSON.stringify(seededSession));
     localStorage.setItem(layerKey, 'core');

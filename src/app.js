@@ -8,8 +8,9 @@ import './english-detail.css';
 import './english-experience.css';
 import {articles,authors,works,questions,words} from './content.js';
 import {latest,activeEvents,reviewCard,nextReview,localDay,dueKeys,spellingMatches,intervalLabel,newId} from './core.js';
-import {store,record,save,local} from './storage.js';
+import {store,record,save,local,ready,createEvent,commitLearning,setLearningSetting,localSnapshot,adoptCheckpoint} from './storage.js';
 
+import {configured,cloud,login,logout,syncNow} from './cloud/client.js';
 import {importEvents,exportState} from './backup.js';
 import {buildEnglishQueue,recentWrongWordIds} from './english/queue.js';
 import {displayVariants,wordLearningState} from './english/status.js';
@@ -33,6 +34,7 @@ import {createSmartSession,isSmartSession,stepMode,stepKind,sessionProgress,engl
 import {initializeVocabulary,getVocabularyState,activeLearningIds,changeEnglishLayer,findEnglishWord,searchEnglishWords,DATASET_PAGE} from './english-vocab.js';
 import {ENGLISH_LAYERS,englishLayerLimit} from './english/config.js';
 
+await ready;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon=(name)=>`<i class="ph ph-${name}" aria-hidden="true"></i>`;
@@ -49,17 +51,17 @@ let currentRead=null,mode=Object.hasOwn(ENGLISH_MODES,savedEnglishMode)?savedEng
 let phase='input',typed='',hinted=false,audioPlayed=false,paused=false,composing=false,busy=false,lastEvent=null;
 let session=latest(store.events,'session','english')||loadJSON(ENGLISH_STORAGE_KEYS.session,null),litSession=latest(store.events,'session','literature')||loadJSON('wenyan-lit-session',null),litShown=false,litHint=false;
 let timer=null,readTimer=null,backupUrl=null;
-let newWordLimit=Number(local.getItem('wenyan-english-new-limit'))||DEFAULT_ENGLISH_NEW_WORD_LIMIT;
+let newWordLimit=Number(store.settings.newWordLimit?.value||local.getItem('wenyan-english-new-limit'))||DEFAULT_ENGLISH_NEW_WORD_LIMIT;
 if(!ENGLISH_NEW_WORD_LIMITS.includes(newWordLimit))newWordLimit=DEFAULT_ENGLISH_NEW_WORD_LIMIT;
 let panelReturnFocus=null;
 function loadJSON(key,fallback){try{return JSON.parse(local.getItem(key))||fallback;}catch{return fallback;}}
 function preference(key,value){try{local.setItem(key,value);}catch{toast('设置未能保存到本机');}}
-function persistSession(){preference(ENGLISH_STORAGE_KEYS.session,JSON.stringify(session));if(session)record('session','english',session);}
-function persistLit(){preference('wenyan-lit-session',JSON.stringify(litSession));if(litSession)record('session','literature',litSession);}
+async function persistSession(){if(session)await record('session','english',session);}
+async function persistLit(){if(litSession)await record('session','literature',litSession);}
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('visible');clearTimeout(timer);timer=setTimeout(()=>$('#toast').classList.remove('visible'),2800);}
 function route(){return (location.hash.slice(1)||'today').split('/');}
 function go(path){if(location.hash==='#'+path)render();else location.hash=path;}
-function saveLabel(){return '仅本机保存';}
+function saveLabel(){return store.problem?'保存需要处理':store.status==='synced'?'已同步':store.status==='syncing'?'正在同步':store.status==='auth'?'需要登录':store.status==='offline'?'离线 · 本机已保存':store.outbox.length&&store.owner?'本机已保存 · 待同步':'本机已保存';}
 function applyTheme(){document.documentElement.dataset.theme=theme;document.documentElement.style.setProperty('--reading-size',readingSize+'px');document.documentElement.style.setProperty('--reading-leading',lineHeight);document.documentElement.dataset.reading=readingFamily;}
 function statusHTML(){return btn('settings',`${icon('hard-drive')}<span>${saveLabel()}</span>`,'sync-status');}
 function nav(active){return [['today','house','今日'],['english','text-aa','英语'],['literature','book-open','知识'],['training','keyboard','训练']].map(([path,glyph,label])=>link(path,icon(glyph)+`<span>${label}</span>`,active===path?'nav-item active':'nav-item')).join('');}
@@ -80,7 +82,7 @@ function wordCounts(){
  const byId=new Map(eligible.map(w=>[w.id,w])),wrong=recentWrongWordIds(store.events,eligibleIds).map(id=>byId.get(id)).filter(Boolean);
  return {due,new:fresh,wrong};
 }
-function toggleTask(id){lastEvent=record('task',localDay()+':'+id,{done:!done(id)});render();toast('已更新 · 可撤销');}
+async function toggleTask(id){lastEvent=await record('task',localDay()+':'+id,{done:!done(id)});render();toast('已更新 · 可撤销');}
 function taskRow(id,title,sub,path){return `<div class="task-row ${done(id)?'complete':''}">${btn('task',icon(done(id)?'check-circle':'circle'),'task-check',`data-id="${id}" aria-label="${done(id)?'撤销完成':'标记完成'}：${esc(title)}"`)}${link(path,`<span>${esc(title)}</span><span class="task-meta">${esc(sub)} ${icon('caret-right')}</span>`,'task-link')}</div>`;}
 function dailyPlan(counts=wordCounts()){
  const daily=englishDailyStats(store.events),remaining=Math.max(0,newWordLimit-daily.newLearned);
@@ -105,7 +107,7 @@ function readPage(id,num){
  const a=articles.find(x=>x.id===id);if(!a)return go('literature');const index=Math.max(0,Math.min(Number(num)||0,a.sections.length-1)),sec=a.sections[index];
  const saved=resume();const restore=saved.article===id&&saved.section===index?saved.paragraph:0;
  currentRead={article:id,section:index,paragraph:restore};
- if(saved.article!==id||saved.section!==index)record('reading','resume',currentRead);
+ if(saved.article!==id||saved.section!==index)record('reading','resume',currentRead).catch(()=>{});
  shell(`<header class="focus-header">${link('literature',icon('arrow-left')+' 返回','back-link')}<span class="breadcrumb">${a.period} / ${a.author?'鲁迅 / ':''}阅读</span><div>${btn('toc','目录','text-button')}${btn('appearance','Aa','text-button')}</div></header><div id="remote-position"></div><article class="reading-page"><h1>${esc(a.title)}</h1><h2 class="chapter-heading">${String(index+1).padStart(2,'0')} &nbsp; ${esc(sec.title)}</h2>${sec.paragraphs.map((p,i)=>`<p class="reading-paragraph" id="paragraph-${i}">${esc(p)}</p>`).join('')}${sec.work?link('work/'+sec.work+'/from-read','查阅《孔乙己》 '+icon('arrow-up-right'),'text-link inline-work'):''}<details class="source-note"><summary>内容来源</summary><p>${esc(a.source)}</p>${a.author?`<a href="https://zh.wikisource.org/zh-hans/孔乙己" target="_blank" rel="noopener">《孔乙己》原文</a>`:''}</details><footer class="reading-footer">${index?link(`read/${id}/${index-1}`,icon('arrow-left')+' 上一节','text-button'):'<span></span>'}<div class="section-progress"><progress value="${index+1}" max="${a.sections.length}" aria-label="小节位置"></progress><span class="muted">本节 ${index+1} / ${a.sections.length}</span>${questions.some(q=>q.article===id&&q.section===index)?link('recall/'+id+'/section-'+index,'练习本节','button primary'):btn('finish-reading','完成阅读','primary')}</div>${index<a.sections.length-1?link(`read/${id}/${index+1}`,'下一节 '+icon('arrow-right'),'text-button'):btn('finish-reading','完成阅读','text-button')}</footer></article>`,'literature',true);
  requestAnimationFrame(()=>{const p=$('#paragraph-'+restore);if(restore>0)p?.scrollIntoView({block:'start'});});
 }
@@ -117,9 +119,9 @@ function recallPage(article,id){
  shell(`<header class="focus-header">${link('read/'+article+'/'+(currentRead?.article===article?currentRead.section:q.section),icon('arrow-left')+' 返回阅读','back-link')}<span>${q.type} · 回忆练习</span><span class="muted">${litSession.index+1} / ${litSession.queue.length}</span></header><section class="recall-page"><h1>${esc(q.prompt)}</h1><p class="muted recall-instruction">先在心里回答，也可以记一个提纲。</p><div class="outline-toggle">${btn('outline-toggle','记录自己的提纲（可选）','text-button')}</div><textarea hidden id="outline" aria-label="自己的回答提纲（可不填写）" placeholder="自己的提纲（可不填写）" rows="3"></textarea><div id="lit-answer"></div><div id="lit-actions">${btn('lit-show','查看参考提纲 <kbd>Space</kbd>','primary')}</div><p class="source-note">自编练习 · 展开后再对照关键点自评</p></section>`,'literature',true);
 }
 function showLit(){litShown=true;const q=questions.find(x=>x.id===litSession.queue[litSession.index]);$('#lit-answer').innerHTML=`<p class="eyebrow">示例提纲</p><ol>${q.points.map(p=>`<li>${esc(p)}</li>`).join('')}</ol><p class="muted">核对必要要点和作品例证，再评价刚才的回忆。</p>`;$('#lit-actions').innerHTML=`${btn('lit-rate','没想起 <kbd>1</kbd>','', 'data-rating="1"')}${btn('lit-rate','想起来了 <kbd>2</kbd>','primary','data-rating="3"')}`;$('#lit-actions button').focus();}
-function rateLit(rating){if(!litShown||busy)return;busy=true;const q=questions.find(x=>x.id===litSession.queue[litSession.index]);lastEvent=record('review','lit:'+q.id,{rating});litSession.results.push({id:q.id,rating,eventId:lastEvent.id});litSession.index++;persistLit();render();busy=false;}
+async function rateLit(rating){if(!litShown||busy)return;busy=true;const q=questions.find(x=>x.id===litSession.queue[litSession.index]);lastEvent=await record('review','lit:'+q.id,{rating});litSession.results.push({id:q.id,rating,eventId:lastEvent.id});litSession.index++;await persistLit();render();busy=false;}
 function litResults(){shell(`<section class="results-page">${link('today',icon('arrow-left')+' 今日','back-link')}<h1>本次回忆完成</h1><p class="muted">${litSession.results.length}题 · 需要再想${litSession.results.filter(r=>r.rating===1).length}题</p><div class="result-list">${litSession.results.map(r=>{const q=questions.find(q=>q.id===r.id);return `<div class="result-row"><span>${esc(q.prompt)}</span><span class="muted">${intervalLabel(reviewCard(store.events,'lit:'+r.id).due)}</span></div>`;}).join('')}</div>${litSession.results.some(r=>r.rating===1)?btn('lit-retry','再练需要回忆的题','primary'):btn('lit-new','再练本组','primary')}${btn('undo','撤销上次评价','text-button',lastEvent?'':'disabled')}${link('today','回到今日','text-link')}</section>`,'literature');recordTaskOnce('recall');}
-function recordTaskOnce(key){if(!done(key))record('task',localDay()+':'+key,{done:true});}
+function recordTaskOnce(key){if(!done(key))record('task',localDay()+':'+key,{done:true}).catch(()=>{});}
 function training(){shell(`<section class="library-page"><header class="page-heading"><h1>训练</h1>${btn('settings',icon('sliders-horizontal')+' 偏好','text-button')}</header><p class="muted lead">先自己回忆或作答，再核对要点。</p><div class="index-list">${link('english','<div><h2>英语词汇</h2><p class="muted">今天学习 · 自由练习 · 错词订正</p></div>'+icon('caret-right'),'index-row')}${articles.map(a=>link('recall/'+a.id,`<div><h2>${esc(a.title)}</h2><p class="muted">要点回忆 · 名词解释 · 简答</p></div>${icon('caret-right')}`,'index-row')).join('')}${questions.filter(q=>q.type==='论述').map(q=>link('recall/'+q.article+'/'+q.id,`<div><span class="eyebrow">论述练习</span><h2 class="small-heading">${esc(q.prompt)}</h2></div>${icon('caret-right')}`,'index-row')).join('')}</div><p class="source-note">当前为自编样本。院校真题下一阶段接入。</p></section>`,'training');}
 function layerOptions(){const meta=getVocabularyState();return Object.entries(ENGLISH_LAYERS).map(([id,info])=>`<option value="${id}" ${meta.layer===id?'selected':''}>${info.label} · ${englishLayerLimit(id,meta.total)} 词</option>`).join('');}
 function sourceInfo(){
@@ -135,16 +137,16 @@ function english(){
  shell(`<section class="english-page"><header class="page-heading"><h1>英语</h1><span class="muted">${meta.status==='ready'?`考研词库 · ${meta.total}`:unavailable?'正在准备词库':'兼容词组'}</span></header><div class="english-entry"><div class="learning-intent"><p class="session-context">${counts.due.length} 个到期 · ${counts.wrong.length} 个错词 · 今日建议 ${newCount} 个新词</p><h2>${hasSession?'继续今天的学习':available?'今天，从这一组开始':'今天的学习已完成'}</h2><p class="muted session-estimate">${hasSession?`已保存进度 · ${isSmartSession(session)?'按记忆状态安排':'自由'+englishModeLabel(session.mode)}`:available?`预计约 ${estimatedMinutes(plan)} 分钟 · 系统安排复习与新词`:'复习会在到期时回来，也可以自由练习。'}</p><div class="start-actions">${hasSession?btn('resume-words',startLabel(progress,true)+' <kbd>Enter</kbd>','primary'):btn('start-smart',startLabel(progress)+' <kbd>Enter</kbd>','primary',available&&!unavailable?'':'disabled')}</div></div><aside class="learning-note"><span class="eyebrow">${hasSession?'回到当前词':'先回忆，再确认'}</span><p>${hasSession?'当前词的提示和首次作答都已保存。':'到期词直接回忆。新词先熟悉拼写，再隔几个词默写一次。'}</p></aside></div>${meta.status==='sample'?'<p class="source-note" role="status">考研词库暂未载入，兼容词组可继续使用。学习记录已保留。</p>':''}<div class="english-secondary"><details class="learning-options"><summary>学习安排 <span>${ENGLISH_LAYERS[meta.layer].label} · 每日 ${newWordLimit} 个新词</span></summary><div class="options-controls"><label class="small-control">每日新词目标 <select id="new-limit">${ENGLISH_NEW_WORD_LIMITS.map(value=>`<option value="${value}" ${value===newWordLimit?'selected':''}>${value} 个</option>`).join('')}</select></label><label class="small-control">词库范围 <select id="vocab-layer">${layerOptions()}</select></label></div><p class="source-note">到期与错词优先；每组会为新词回忆和错词回流留出位置。</p></details><details class="free-practice"><summary>自由练习 <span>跟打 · 默写 · 听写</span></summary><div class="mode-tabs" role="group" aria-label="自由练习模式">${Object.entries(ENGLISH_MODES).map(([id,info])=>btn('mode',info.label,mode===id?'active':'',`data-mode="${id}" aria-pressed="${mode===id}"`)).join('')}</div><p class="mode-description muted">${englishModeDescription(mode)} ${mode==='follow'?'跟打只记录拼写练习。':'自评会用于安排复习。'}</p>${hasSession?'<p class="muted">完成当前组后，再开始自由练习。</p>':btn('start-words','开始'+englishModeLabel(mode),'',counts.due.length+counts.wrong.length+counts.new.length&&!unavailable?'':'disabled')}</details></div><div class="daily-feedback" aria-label="今日英语学习反馈"><span>今日</span><span>新学 ${daily.newLearned}</span><span>主动回忆 ${daily.reviewed}</span>${daily.firstCorrectRate!=null?`<span>首次正确 ${daily.firstCorrectRate}%</span>`:''}${daily.spellingErrors?`<span>拼写订正 ${daily.spellingErrors}</span>`:''}</div><div class="vocabulary-heading"><h2 class="section-label vocabulary-label">词表</h2>${btn('search',icon('magnifying-glass')+' 查找单词 <kbd>/</kbd>','text-button')}</div><div class="filter-tabs">${[['all','全部'],['wrong','错词'],['favorites','收藏'],['mastered','已掌握']].map(([id,name])=>btn('word-filter',name,wordFilter===id?'text-button active':'text-button',`data-filter="${id}" aria-pressed="${wordFilter===id}"`)).join('')}</div><div class="vocabulary-list">${visible.length?visible.map(w=>btn('word-detail',`<span class="word-small">${esc(w.word)}</span><span class="muted">${esc(w.meaning)}</span>`,'vocabulary-row',`data-word="${esc(w.id)}"`)).join(''):'<p class="muted empty-vocabulary">这里还没有单词。</p>'}</div>${hiddenCount?`<p class="list-note muted">显示前 ${visible.length} 个 · / 搜索全部词库</p>`:''}${sourceInfo()}</section>`,'english');
 }
 
-function startSmart(){
+async function startSmart(){
  if(hasUnfinishedEnglishSession(session)){go('train');return;}
  if(getVocabularyState().status==='loading'){toast('词库准备好后即可开始');return;}
  const {plan}=dailyPlan();if(!plan.queue.length){toast('今天的学习已完成');return;}
- session={...plan,id:newId()};persistSession();go('train');
+ session={...plan,id:newId()};await persistSession();go('train');
 }
-function startWords(){
+async function startWords(){
  if(hasUnfinishedEnglishSession(session)){toast('先继续未完成词组');go('train');return;}
  const c=wordCounts(),queue=buildEnglishQueue({dueIds:c.due.map(w=>w.id),wrongIds:c.wrong.map(w=>w.id),newIds:c.new.map(w=>w.id),newLimit:newWordLimit,maxTotal:ENGLISH_MAX_SESSION_WORDS});if(!queue.length){toast('当前没有待学习单词');return;}
- session={id:newId(),mode,queue,index:0,results:[],startedAt:Date.now()};persistSession();go('train');
+ session={id:newId(),mode,queue,index:0,results:[],startedAt:Date.now()};await persistSession();go('train');
 }
 
 function train(){
@@ -159,7 +161,7 @@ function train(){
  $('#word-input').addEventListener('compositionstart',()=>composing=true);
  $('#word-input').addEventListener('compositionend',()=>{composing=false;inputChanged();});
  $('#word-input').addEventListener('input',inputChanged);
- $('#word-form').addEventListener('submit',e=>{e.preventDefault();submitWord();});
+ $('#word-form').addEventListener('submit',e=>{e.preventDefault();mutate(submitWord);});
  if(phase==='rating'){ $('#word-input').value=w.word;ratingActions(); }
  else $('#word-input').focus();
  if((autoVoice&&currentMode==='follow')||currentMode==='listen')speak(w.word);
@@ -172,7 +174,7 @@ function inputChanged(){
  $('#word-input').classList.toggle('has-error',wrong);
  const first=[...typed].findIndex((c,i)=>c.toLowerCase()!==w.word[i]?.toLowerCase());
  $('#input-feedback').innerHTML=wrong?`第 ${first+1} 个字母 <span class="wrong-letter">${esc(typed[first])}</span> 不匹配，提交后完整订正`:'完整输入，熟悉拼写';
- if(spellingMatches(typed,w.word))submitWord();
+ if(spellingMatches(typed,w.word))mutate(submitWord);
 }
 function revealWord(w){$('#word-stage').innerHTML=wordStage(w);}
 function ratingActions(){
@@ -183,30 +185,30 @@ function ratingActions(){
  $('.training-progress .keyboard-note').textContent='Enter 继续 · 1 没想起'+(failed?'':' · 2 想起来了')+' · Esc 暂停';
  $('#memory-actions [data-rating="'+(failed?'1':'3')+'"]').focus();
 }
-function submitWord(){
- if(composing||paused||busy||!session||phase==='rating')return;
+async function submitWord(){
+ if(store.problem||composing||paused||busy||!session||phase==='rating')return;
  const w=findEnglishWord(session.queue[session.index]),value=$('#word-input').value,currentMode=stepMode(session);
  if(!value.trim()){toast('先输入完整单词');return;}
  if(currentMode==='listen'&&!audioPlayed&&!hinted){toast('发音尚未播放，可重播或使用提示');return;}
  const correct=spellingMatches(value,w.word);
  if(phase==='input'&&typeof session.current?.firstCorrect!=='boolean')session=recordEnglishFirstAttempt(session,correct,hinted);
- if(!correct){phase='correction';session.current={...session.current,phase};persistSession();revealWord(w);$('#word-input').value='';$('#word-input').classList.add('has-error');$('#input-feedback').classList.add('is-error');$('#input-feedback').textContent='拼写需要订正，请从首字母完整输入一次。';$('#word-input').focus();return;}
+ if(!correct){phase='correction';session.current={...session.current,phase};await persistSession();revealWord(w);$('#word-input').value='';$('#word-input').classList.add('has-error');$('#input-feedback').classList.add('is-error');$('#input-feedback').textContent='拼写需要订正，请从首字母完整输入一次。';$('#word-input').focus();return;}
  $('#word-input').classList.remove('has-error');$('#word-input').classList.add('correct');$('#input-feedback').classList.remove('is-error');
  if(currentMode==='follow'){
-  busy=true;persistSession();$('#input-feedback').textContent=isSmartSession(session)?'已熟悉拼写，稍后回忆':'已完成';const index=session.index,id=session.id;
-  setTimeout(()=>{if(paused||route()[0]!=='train'||session.id!==id||session.index!==index){busy=false;return;}advanceWord(null);},140);
- } else {phase='rating';session.current={...session.current,phase};persistSession();revealWord(w);$('#word-input').readOnly=true;$('#word-actions').hidden=true;ratingActions();}
+  busy=true;await persistSession();$('#input-feedback').textContent=isSmartSession(session)?'已熟悉拼写，稍后回忆':'已完成';const index=session.index,id=session.id;
+  setTimeout(()=>{if(paused||route()[0]!=='train'||session.id!==id||session.index!==index){busy=false;return;}mutate(()=>advanceWord(null));},140);
+ } else {phase='rating';session.current={...session.current,phase};await persistSession();revealWord(w);$('#word-input').readOnly=true;$('#word-actions').hidden=true;ratingActions();}
 }
-function advanceWord(rating){
+async function advanceWord(rating){
  const id=session.queue[session.index],descriptor=englishStepEvent(session,rating);
- lastEvent=record(descriptor.kind,wordKey(id),descriptor.value);
- session=completeEnglishStep(session,lastEvent);persistSession();render();
+ const event=await createEvent(descriptor.kind,wordKey(id),descriptor.value,{sessionId:session.id,attemptId:session.id+':'+session.index+':'+(stepKind(session)||session.mode)});
+ const next=completeEnglishStep(session,event);await commitLearning([event],next);lastEvent=event;session=next;render();
 }
-function persistHint(){hinted=true;session=markEnglishSessionHinted(session);persistSession();}
-function wordHint(){if(phase!=='input'&&phase!=='correction')return;persistHint();const w=findEnglishWord(session.queue[session.index]);revealWord(w);$('#input-feedback').textContent='已用提示，本次需要再想';}
-function speak(word){
+async function persistHint(){hinted=true;session=markEnglishSessionHinted(session);await persistSession();}
+async function wordHint(){if(phase!=='input'&&phase!=='correction')return;await persistHint();const w=findEnglishWord(session.queue[session.index]);revealWord(w);$('#input-feedback').textContent='已用提示，本次需要再想';}
+async function speak(word){
  if(!('speechSynthesis' in window)){toast('当前浏览器不支持发音，可使用提示');return;}
- if(stepMode(session)==='recall'&&route()[0]==='train'&&phase!=='rating')persistHint();
+ if(stepMode(session)==='recall'&&route()[0]==='train'&&phase!=='rating')await persistHint();
  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(findEnglishWord(word)?.word||word);u.lang=ENGLISH_TTS.language;u.rate=ENGLISH_TTS.rate;
  const voice=speechSynthesis.getVoices().find(v=>v.lang==='en-GB')||speechSynthesis.getVoices().find(v=>v.lang.startsWith('en'));if(voice)u.voice=voice;
  const id=session?.id,index=session?.index;
@@ -238,7 +240,7 @@ function closePanel(){
  (replacement||$('#word-input')||$('#main'))?.focus();
 }
 
-function settings(){openPanel(`<h2>偏好与备份</h2><label>外观 <select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗色</option></select></label><label class="check-label"><input id="voice" type="checkbox" ${autoVoice?'checked':''}/>训练时自动发音</label><p class="source-note">上班使用建议关闭发音。发音由浏览器提供。</p><hr/><h3>本机备份</h3><div class="panel-actions">${btn('export','导出记录')}${btn('import','导入记录')}${btn('import-text','粘贴备份','text-button')}</div><p class="source-note">记录保存在这台电脑的当前浏览器。导入会合并记录、复习安排和续学位置。建议定期导出一份备份。</p><input id="import-file" type="file" accept="application/json" hidden/>`);$('#theme').value=theme;}
+function settings(){openPanel(`<h2>偏好与备份</h2><label>外观 <select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗色</option></select></label><label class="check-label"><input id="voice" type="checkbox" ${autoVoice?'checked':''}/>训练时自动发音</label><p class="source-note">上班使用建议关闭发音。发音由浏览器提供。</p><hr/><h3>云端学习记录</h3>${configured?`<p role="status">${saveLabel()}</p>${store.cloudError?`<p class="source-note">${esc(store.cloudError)}</p>`:''}<div class="panel-actions">${store.status==='auth'?btn('cloud-login','登录可信电脑'):btn('cloud-sync','立即同步')}${store.owner?btn('cloud-logout','退出云端登录','text-button'):''}</div>`:'<p class="source-note">当前版本尚未启用云端连接，本机学习和备份可正常使用。</p>'}<hr/><h3>本机备份</h3><div class="panel-actions">${btn('export','导出记录')}${btn('import','导入记录')}${btn('import-text','粘贴备份','text-button')}</div><p class="source-note">记录保存在这台电脑的当前浏览器。导入会合并记录、复习安排和续学位置。建议定期导出一份备份。</p><input id="import-file" type="file" accept="application/json" hidden/>`);$('#theme').value=theme;}
 function appearance(){openPanel(`<h2>阅读外观</h2><label>字号 <input id="font-size" type="range" min="16" max="24" value="${readingSize}"/> <span id="size-label">${readingSize}px</span></label><label>行距 <select id="line-height"><option value="1.65">紧凑</option><option value="1.85">标准</option><option value="2">宽松</option></select></label><label>正文字体 <select id="reading-family"><option value="serif">宋体</option><option value="sans">黑体</option></select></label>`);$('#line-height').value=lineHeight;$('#reading-family').value=readingFamily;}
 function toc(){const a=articles.find(a=>a.id===currentRead.article);openPanel(`<h2>章节目录</h2><div class="toc-list">${a.sections.map((s,i)=>link(`read/${a.id}/${i}`,`${String(i+1).padStart(2,'0')} ${esc(s.title)}`,i===currentRead.section?'active':'')).join('')}</div>`);}
 function search(){openPanel(`<h2>搜索</h2><label class="sr-only" for="search-input">搜索单词、作家、作品或知识点</label><input type="search" id="search-input" placeholder="单词、作家、作品或知识点"/><div id="search-results"></div><p class="source-note">↑↓ 选择 · Enter 打开 · Esc 返回</p>`);$('#search-input').focus();$('#search-input').addEventListener('input',searchResults);searchResults();}
@@ -261,32 +263,36 @@ function wordDetail(id){
 }
 
 function exportRecords(){
- const text=JSON.stringify({...exportState(store.events),...(store.problem?{unreadableOriginal:store.rawRecords}:{})},null,2);
+ const text=JSON.stringify({...exportState(store.events),settings:store.settings,...(store.problem?{unreadableOriginal:store.rawRecords}:{})},null,2);
  openPanel(`<h2>导出备份</h2><a id="backup-download" class="button primary">下载备份文件</a><details><summary>下载不可用时，复制备份文字</summary><label for="backup-text">完整备份</label><textarea id="backup-text" readonly rows="8" style="width:100%">${esc(text)}</textarea></details><p class="source-note">包含已完成记录、复习安排和续学位置。请妥善保存。</p>`);
  backupUrl=URL.createObjectURL(new Blob([text],{type:'application/json'}));$('#backup-download').href=backupUrl;$('#backup-download').download='Wenyan-学习记录-'+localDay()+'.json';
 }
-function importBackup(data){const merged=importEvents(data,store.events);if(!save(merged)){toast('未能保存导入记录，请导出当前备份后重试');return;}window.dispatchEvent(new Event('wenyan-remote'));toast('记录已合并');panel.close();render();}
+async function importBackup(data){const merged=importEvents(data,store.events);if(!await save(merged)){toast('未能保存导入记录，请导出当前备份后重试');return;}window.dispatchEvent(new Event('wenyan-remote'));toast('记录已合并');panel.close();render();}
 const actions={
- 'task':el=>toggleTask(el.dataset.id),'five-minutes':()=>{litSession=null;go('recall/narrative/perspective');},'undo':()=>{if(!lastEvent)return;record('undo',lastEvent.key,{id:lastEvent.id});const id=lastEvent.id;lastEvent=null;toast('已撤销，复习安排已恢复');if(session?.results.at(-1)?.eventId===id){session=undoEnglishStep(session,id);persistSession();record('task',localDay()+':english',{done:false});go('train');}else if(litSession?.results.at(-1)?.eventId===id){litSession.results.pop();litSession.index--;persistLit();record('task',localDay()+':recall',{done:false});go('recall/'+litSession.article);render();}else render();},
- 'finish-reading':()=>{recordTaskOnce(currentRead?.article==='avant-garde'?'contemporary':'reading');toast('阅读已完成');go('today');},'return-read':()=>{const r=currentRead||resume();go(`read/${r.article}/${r.section}`);},
- 'outline-toggle':()=>{$('#outline').hidden=!$('#outline').hidden;if(!$('#outline').hidden)$('#outline').focus();},'lit-new':()=>{litStart(litSession.article);render();},'lit-show':showLit,'lit-rate':el=>rateLit(Number(el.dataset.rating)),'lit-retry':()=>{litSession={...litSession,queue:litSession.results.filter(r=>r.rating===1).map(r=>r.id),index:0,results:[]};persistLit();render();},
- 'mode':el=>{mode=el.dataset.mode;preference(ENGLISH_STORAGE_KEYS.mode,mode);document.querySelectorAll('[data-action="mode"]').forEach(button=>{button.classList.toggle('active',button.dataset.mode===mode);button.setAttribute('aria-pressed',button.dataset.mode===mode);});$('.mode-description').textContent=englishModeDescription(mode)+(mode==='follow'?' 跟打只记录拼写练习。':' 自评会用于安排复习。');const start=$('[data-action="start-words"]');if(start)start.textContent='开始'+englishModeLabel(mode);},'word-filter':el=>{wordFilter=el.dataset.filter;english();},'start-smart':startSmart,'start-words':startWords,'resume-words':()=>go('train'),
- 'exit-training':()=>{paused=true;persistSession();window.speechSynthesis?.cancel();go('english');},'pause':()=>{paused=true;busy=false;window.speechSynthesis?.cancel();openPanel(`<h2>已暂停</h2><p class="muted">已完成的单词已保存。继续后回到当前词。</p>${btn('continue-training','继续训练','primary')}${btn('exit-training','结束本次','text-button')}`);},'continue-training':()=>{paused=false;panel.close();if($('#word-input')?.classList.contains('correct')&&stepMode(session)==='follow')advanceWord(null);else if(phase==='rating')ratingActions();else $('#word-input')?.focus();},
- 'speak':el=>speak(el.dataset.word||session?.queue[session.index]),'hint':wordHint,'word-rate':el=>{if(phase!=='rating'||busy)return;busy=true;advanceWord(Number(el.dataset.rating));},
- 'retry-words':()=>{const list=[...new Set(session.results.filter(r=>r.rating===1||r.firstCorrect===false||r.hinted).map(r=>r.id))];if(!list.length)return;session=isSmartSession(session)?createSmartSession({wrongIds:list,id:newId(),newLimit:0}):{id:newId(),mode:session.mode,queue:list,index:0,results:[],startedAt:Date.now()};persistSession();go('train');},
- 'settings':settings,'appearance':appearance,'toc':toc,'search':search,'close-panel':closePanel,
- 'favorite-word':el=>{const id=el.dataset.word,on=!latest(store.events,'favorite',wordKey(id))?.on;record('favorite',wordKey(id),{on});el.setAttribute('aria-pressed',on);toast(on?'已收藏':'已取消收藏');},'mastered-word':el=>{const id=el.dataset.word,on=!latest(store.events,'mastered',wordKey(id))?.on;record('mastered',wordKey(id),{on});el.setAttribute('aria-pressed',on);toast(on?'已掌握 · 后续组不再安排这个词':'已恢复复习');},'word-detail':el=>wordDetail(el.dataset.word),'favorite':el=>{const id=el.dataset.word;record('favorite',wordKey(id),{on:!latest(store.events,'favorite',wordKey(id))?.on});wordDetail(id);panel.querySelector('[data-action="favorite"]').focus();},'mastered':el=>{const id=el.dataset.word;record('mastered',wordKey(id),{on:!latest(store.events,'mastered',wordKey(id))?.on});wordDetail(id);panel.querySelector('[data-action="mastered"]').focus();},
-  'export':exportRecords,'import':()=>$('#import-file').click(),'import-text':()=>openPanel(`<h2>导入备份文字</h2><label for="import-text">完整备份</label><textarea id="import-text" rows="8" style="width:100%"></textarea>${btn('import-pasted','合并记录','primary')}`),'import-pasted':()=>{try{const value=$('#import-text').value;if(value.length>8*1024*1024)throw Error();importBackup(JSON.parse(value));}catch{toast('备份格式不正确，未修改当前记录');}},
- 'remote-use':()=>{const p=resume();go(`read/${p.article}/${p.section}`);render();},'remote-keep':()=>{record('reading','resume',currentRead);$('#remote-position').innerHTML='';}
+ 'task':el=>toggleTask(el.dataset.id),'five-minutes':async()=>{litSession=null;go('recall/narrative/perspective');}, 'undo':async()=>{if(!lastEvent)return;const previous=lastEvent,id=previous.id;const undo=await createEvent('undo',previous.key,{id});if(session?.results.at(-1)?.eventId===id){const next=undoEnglishStep(session,id);await commitLearning([undo],next);session=next;lastEvent=null;go('train');}else{await commitLearning([undo]);lastEvent=null;render();}toast('已撤销，复习安排已恢复');},
+ 'finish-reading':async()=>{recordTaskOnce(currentRead?.article==='avant-garde'?'contemporary':'reading');toast('阅读已完成');go('today');},'return-read':async()=>{const r=currentRead||resume();go(`read/${r.article}/${r.section}`);},
+ 'outline-toggle':async()=>{$('#outline').hidden=!$('#outline').hidden;if(!$('#outline').hidden)$('#outline').focus();},'lit-new':async()=>{litStart(litSession.article);render();},'lit-show':showLit,'lit-rate':el=>rateLit(Number(el.dataset.rating)),'lit-retry':async()=>{litSession={...litSession,queue:litSession.results.filter(r=>r.rating===1).map(r=>r.id),index:0,results:[]};await persistLit();render();},
+ 'mode':async el=>{mode=el.dataset.mode;preference(ENGLISH_STORAGE_KEYS.mode,mode);document.querySelectorAll('[data-action="mode"]').forEach(button=>{button.classList.toggle('active',button.dataset.mode===mode);button.setAttribute('aria-pressed',button.dataset.mode===mode);});$('.mode-description').textContent=englishModeDescription(mode)+(mode==='follow'?' 跟打只记录拼写练习。':' 自评会用于安排复习。');const start=$('[data-action="start-words"]');if(start)start.textContent='开始'+englishModeLabel(mode);},'word-filter':async el=>{wordFilter=el.dataset.filter;english();},'start-smart':startSmart,'start-words':startWords,'resume-words':()=>{adoptCheckpoint(session?.id);go('train');},
+ 'exit-training':async()=>{paused=true;await persistSession();window.speechSynthesis?.cancel();go('english');},'pause':async()=>{paused=true;busy=false;window.speechSynthesis?.cancel();openPanel(`<h2>已暂停</h2><p class="muted">已完成的单词已保存。继续后回到当前词。</p>${btn('continue-training','继续训练','primary')}${btn('exit-training','结束本次','text-button')}`);},'continue-training':async()=>{paused=false;panel.close();if($('#word-input')?.classList.contains('correct')&&stepMode(session)==='follow')await advanceWord(null);else if(phase==='rating')ratingActions();else $('#word-input')?.focus();},
+ 'speak':el=>speak(el.dataset.word||session?.queue[session.index]),'hint':wordHint,'word-rate':async el=>{if(phase!=='rating'||busy)return;busy=true;await advanceWord(Number(el.dataset.rating));},
+ 'retry-words':async()=>{const list=[...new Set(session.results.filter(r=>r.rating===1||r.firstCorrect===false||r.hinted).map(r=>r.id))];if(!list.length)return;session=isSmartSession(session)?createSmartSession({wrongIds:list,id:newId(),newLimit:0}):{id:newId(),mode:session.mode,queue:list,index:0,results:[],startedAt:Date.now()};await persistSession();go('train');},
+ 'cloud-sync':()=>syncNow(),'cloud-logout':async()=>{await logout();settings();},'cloud-login':()=>openPanel(`<h2>登录文研</h2><form id="cloud-login-form"><label>邮箱 <input name="email" type="email" autocomplete="username" required></label><label>密码 <input name="password" type="password" autocomplete="current-password" required></label><button type="submit" class="primary">登录这台可信电脑</button><p class="source-note">仅供本人使用。登录后自动续签，离线时仍可继续学习。</p><p id="login-message" role="status"></p></form>`),'settings':settings,'appearance':appearance,'toc':toc,'search':search,'close-panel':closePanel,
+ 'favorite-word':async el=>{const id=el.dataset.word,on=!latest(store.events,'favorite',wordKey(id))?.on;await record('favorite',wordKey(id),{on});el.setAttribute('aria-pressed',on);toast(on?'已收藏':'已取消收藏');},'mastered-word':async el=>{const id=el.dataset.word,on=!latest(store.events,'mastered',wordKey(id))?.on;await record('mastered',wordKey(id),{on});el.setAttribute('aria-pressed',on);toast(on?'已掌握 · 后续组不再安排这个词':'已恢复复习');},'word-detail':el=>wordDetail(el.dataset.word),'favorite':async el=>{const id=el.dataset.word;await record('favorite',wordKey(id),{on:!latest(store.events,'favorite',wordKey(id))?.on});wordDetail(id);panel.querySelector('[data-action="favorite"]').focus();},'mastered':async el=>{const id=el.dataset.word;await record('mastered',wordKey(id),{on:!latest(store.events,'mastered',wordKey(id))?.on});wordDetail(id);panel.querySelector('[data-action="mastered"]').focus();},
+  'export':exportRecords,'import':()=>$('#import-file').click(),'import-text':()=>openPanel(`<h2>导入备份文字</h2><label for="import-text">完整备份</label><textarea id="import-text" rows="8" style="width:100%"></textarea>${btn('import-pasted','合并记录','primary')}`),'import-pasted':async()=>{try{const value=$('#import-text').value;if(value.length>8*1024*1024)throw Error();await importBackup(JSON.parse(value));}catch{toast('备份格式不正确，未修改当前记录');}},
+ 'remote-use':async()=>{const p=resume();go(`read/${p.article}/${p.section}`);render();},'remote-keep':async()=>{await record('reading','resume',currentRead);$('#remote-position').innerHTML='';}
 };
+let mutationPending=false;
+async function mutate(fn){if(mutationPending)return;mutationPending=true;try{await fn();}catch(e){session=latest(store.events,'session','english')||null;litSession=latest(store.events,'session','literature')||null;busy=false;const message=store.problem;if(store.errorCode==='LOCAL_WRITER_CONFLICT'){adoptCheckpoint(session?.id);store.problem='';}toast(message||'记录未能保存，本次停在原位置');render();}finally{mutationPending=false;}}
+for(const name of Object.keys(actions)){const action=actions[name];actions[name]=el=>mutate(()=>action(el));}
 document.addEventListener('click',e=>{if(e.target.closest('.skip-link')){e.preventDefault();$('#main').focus();return;}const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions[el.dataset.action]?.(el);}if(e.target.closest('#panel a[href^="#"]'))panel.close();});
+document.addEventListener('submit',async e=>{if(e.target.id!=='cloud-login-form')return;e.preventDefault();const form=e.target;const message=$('#login-message');try{await login(form.elements.email.value,form.elements.password.value);form.elements.password.value='';settings();}catch{form.elements.password.value='';message.textContent='暂时未能登录，请核对账号或稍后重试。';}});
 document.addEventListener('change',async e=>{
  const el=e.target;
- if(el.id==='vocab-layer'){changeEnglishLayer(el.value);if($('.learning-options')){$('.learning-options').open=true;$('#vocab-layer').focus();}return;}
- if(el.id==='new-limit'){newWordLimit=Number(el.value);preference('wenyan-english-new-limit',newWordLimit);english();$('.learning-options').open=true;$('#new-limit').focus();return;}
+ if(el.id==='vocab-layer'){changeEnglishLayer(el.value);await setLearningSetting('layer',el.value);if($('.learning-options')){$('.learning-options').open=true;$('#vocab-layer').focus();}return;}
+ if(el.id==='new-limit'){newWordLimit=Number(el.value);preference('wenyan-english-new-limit',newWordLimit);english();$('.learning-options').open=true;$('#new-limit').focus();await setLearningSetting('newWordLimit',newWordLimit);return;}
  if(el.id==='theme'){theme=el.value;preference('wenyan-theme',theme);applyTheme();}if(el.id==='voice'){autoVoice=el.checked;preference('wenyan-voice',autoVoice?'on':'off');}
  if(el.id==='reading-family'){readingFamily=el.value;preference('wenyan-reading-family',readingFamily);applyTheme();}if(el.id==='line-height'){lineHeight=Number(el.value);preference('wenyan-line-height',lineHeight);applyTheme();}
- if(el.id==='import-file'){try{const f=el.files[0];if(!f||f.size>8*1024*1024)throw Error();const data=JSON.parse(await f.text());importBackup(data);}catch{toast('备份格式不正确，未修改当前记录');}}
+ if(el.id==='import-file'){try{const f=el.files[0];if(!f||f.size>8*1024*1024)throw Error();const data=JSON.parse(await f.text());await importBackup(data);}catch{toast('备份格式不正确，未修改当前记录');}}
 });
 document.addEventListener('input',e=>{if(e.target.id==='font-size'){readingSize=Number(e.target.value);preference('wenyan-font-size',readingSize);$('#size-label').textContent=readingSize+'px';applyTheme();}});
 document.addEventListener('keydown',e=>{
@@ -307,14 +313,14 @@ document.addEventListener('keydown',e=>{
   if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const n=tasks.indexOf(document.activeElement);tasks[n<0?(e.key==='ArrowDown'?0:tasks.length-1):(n+(e.key==='ArrowDown'?1:-1)+tasks.length)%tasks.length]?.focus();}
   if(e.key==='Enter'&&!e.target.closest('a,button,summary')){e.preventDefault();tasks[0]?.click();}
  }
- if(view==='english'&&e.key==='Enter'&&!e.target.closest('a,button,summary')){e.preventDefault();(hasUnfinishedEnglishSession(session)?actions['resume-words']:startSmart)();}
+ if(view==='english'&&e.key==='Enter'&&!e.target.closest('a,button,summary')){e.preventDefault();(hasUnfinishedEnglishSession(session)?actions['resume-words']:actions['start-smart'])();}
  if(view==='results'&&e.key==='Enter'&&!e.target.closest('a,button,summary')){e.preventDefault();go('english');}
  if(view==='recall'){if(e.key===' '&&!litShown){e.preventDefault();showLit();}else if(litShown&&['1','2'].includes(e.key)){e.preventDefault();rateLit(e.key==='1'?1:3);}}
  if(view==='train'){
   const key=e.key.toLowerCase();
-  if(phase==='rating'&&['1','2'].includes(key)){e.preventDefault();if(key==='1'||!(hinted||(isSmartSession(session)&&session.current?.firstCorrect===false)))advanceWord(key==='1'?1:3);}
-  else if(e.key===' '){e.preventDefault();speak(session.queue[session.index]);}
-  else if(key==='h'){e.preventDefault();wordHint();}
+  if(phase==='rating'&&['1','2'].includes(key)){e.preventDefault();if(key==='1'||!(hinted||(isSmartSession(session)&&session.current?.firstCorrect===false)))mutate(()=>advanceWord(key==='1'?1:3));}
+  else if(e.key===' '){e.preventDefault();actions.speak({dataset:{}});}
+  else if(key==='h'){e.preventDefault();actions.hint();}
   else if(key==='f'){e.preventDefault();actions['favorite-word']($('[data-action="favorite-word"]'));}
   else if(key==='m'){e.preventDefault();actions['mastered-word']($('[data-action="mastered-word"]'));}
  }
@@ -323,12 +329,15 @@ window.addEventListener('hashchange',()=>{if(panel.open)panel.close();render();}
 window.addEventListener('scroll',()=>{
  if(route()[0]!=='read'||!currentRead)return;clearTimeout(readTimer);readTimer=setTimeout(()=>{
   const ps=[...document.querySelectorAll('.reading-paragraph')];let index=0;ps.forEach((p,i)=>{if(p.getBoundingClientRect().top<innerHeight*.4)index=i;});
-  if(currentRead.paragraph!==index){currentRead={...currentRead,paragraph:index};record('reading','resume',currentRead);}
+  if(currentRead.paragraph!==index){currentRead={...currentRead,paragraph:index};record('reading','resume',currentRead).catch(()=>{});}
  },450);
 },{passive:true});
 window.addEventListener('wenyan-remote',()=>{
+ if(store.settings.newWordLimit?.value)newWordLimit=store.settings.newWordLimit.value;
+ const syncedLayer=store.settings.layer?.value;if(syncedLayer&&syncedLayer!==getVocabularyState().layer)changeEnglishLayer(syncedLayer);
+
  const remoteSession=latest(store.events,'session','english'),remoteLit=latest(store.events,'session','literature');
- if(route()[0]!=='train'&&remoteSession){session=structuredClone(remoteSession);preference('wenyan-session',JSON.stringify(session));}
+ if(route()[0]!=='train'&&remoteSession){session=structuredClone(remoteSession);adoptCheckpoint(session.id);preference('wenyan-session',JSON.stringify(session));}
  if(route()[0]!=='recall'&&remoteLit){litSession=structuredClone(remoteLit);preference('wenyan-lit-session',JSON.stringify(litSession));}
 
  if(route()[0]==='read'){const remote=resume();if(JSON.stringify(remote)!==JSON.stringify(currentRead))$('#remote-position').innerHTML=`<div class="position-notice">另一个页面更新了阅读位置 ${btn('remote-keep','继续本机','text-button')}${btn('remote-use','查看更新位置','text-button')}</div>`;}
@@ -338,7 +347,11 @@ function updateViewport(){if(window.visualViewport)document.documentElement.styl
 window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);
 
 panel.addEventListener('cancel',e=>{e.preventDefault();closePanel();});
+window.addEventListener('wenyan-cloud-status',()=>{document.querySelectorAll('.sync-status span').forEach(el=>el.textContent=saveLabel());});
 window.addEventListener('wenyan-change',()=>{if(store.problem)toast(store.problem);});
 window.addEventListener('wenyan-vocabulary-loaded',()=>{if(['today','english','train','results'].includes(route()[0]))render();if(panel.open&&$('#search-input'))searchResults();});
 applyTheme();render();
+if('serviceWorker' in navigator&&!new URLSearchParams(location.search).has('test'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+void localSnapshot().catch(()=>{});
+navigator.storage?.persist?.().catch(()=>{});
 initializeVocabulary({getPendingWordIds:()=>pendingEnglishWordIds(session)});

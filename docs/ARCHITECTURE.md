@@ -4,7 +4,7 @@
 
 ## 1. 当前代码
 
-main是静态HTML/CSS/Vanilla JavaScript，Vite构建、ts-fsrs排程；localStorage和JSON备份，没有Auth/数据库/云同步。Desktop-first、English-first，文学与手机专项冻结，不换框架。
+main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Smart 与研究，新增 IDB 原子事务/独立 checkpoint/outbox、窄 Supabase RPC 和 SDK Auth/薄同步。migration 代码存在，尚未在托管项目应用。Desktop-first、English-first，文学与手机专项冻结，不换框架。
 
 | 模块 | 职责 |
 | --- | --- |
@@ -16,7 +16,7 @@ main是静态HTML/CSS/Vanilla JavaScript，Vite构建、ts-fsrs排程；localSto
 | public/data/english、scripts/sync-english-* | 固定内容与确定性生成，不是个人状态 |
 | tests、evidence、legacy | 关键行为/验收证据/历史保留，不存个人学习数据 |
 
-### #12的边界（未合入main）
+### Smart 边界（#12 与实施分支，未合入 main）
 
 English Experience v2 / Smart Session在Draft #12。新词e接触→稍后r回忆；到期/错词直接r；失败最多一次x回流，hinted/首次失败不能按Good。
 
@@ -59,7 +59,7 @@ flowchart TD
 
 必须保留：word:<规范化ID>、首次正确/错误与hinted不可被订正覆盖、接触不算review、错误/提示后的Smart评分、有限回流、Undo、刷新续学、内容许可、JSON恢复。
 
-`wenyan-events-v2`与schema 2是当前实现，**不是永久协议**。用户尚无正式历史，允许有理由的一次云基础升级。本轮不改运行代码。实施时重新查是否已经产生个人数据，保留原导出，不静默清空；旧备份一次性适配，不长期双写。
+`wenyan-events-v2`与schema 2是当前实现，**不是永久协议**。用户尚无正式历史，允许有理由的一次云基础升级。实施分支已经引入一次 v2 导入适配，保留原 localStorage 与稳定 ID，不长期双写。JSON v3 保留事实与续学，旧 v2 可读。具体协议和验收见 [cloud-implementation](cloud-implementation.md)。
 
 版本各司其职：event version、checkpoint version、backup version、content version、scheduler version/parameter epoch。升级算法独立验收；旧客户端不能降级新云数据。未观测字段unknown，不编造时长/错误拼写。
 

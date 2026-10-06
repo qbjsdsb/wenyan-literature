@@ -4,10 +4,11 @@ import { validSmartPlan } from './english/session.js';
 
 export const scheduler = fsrs({enable_fuzz:false});
 export const DAY = 86400000;
-export const kinds = new Set(['review','typing','reading','task','favorite','mastered','undo','session']);
+export const kinds = new Set(['review','typing','reading','task','favorite','mastered','undo','session','attempt']);
 export function validEvent(e) {
   if(!(e && /^[a-zA-Z0-9-]{8,80}$/.test(e.id) && typeof e.device==='string' && e.device.length<=80 && kinds.has(e.kind) && typeof e.key==='string' && e.key.length<=100 && Number.isFinite(e.at) && e.at>0 && e.at<=Date.now()+DAY && e.value && typeof e.value==='object' && !Array.isArray(e.value) && JSON.stringify(e.value).length<=8192))return false;
   const v=e.value;
+  if(e.kind==='attempt')return ['firstCorrect','hinted'].includes(v.field)&&typeof v.value==='boolean'&&typeof v.sessionId==='string'&&Number.isSafeInteger(v.index)&&v.index>=0;
   if(e.kind==='review')return [1,3].includes(v.rating);
   if(e.kind==='typing')return typeof v.correct==='boolean';
   if(e.kind==='reading')return typeof v.article==='string' && Number.isSafeInteger(v.section) && v.section>=0 && v.section<1000 && Number.isSafeInteger(v.paragraph) && v.paragraph>=0 && v.paragraph<1000;

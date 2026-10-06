@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import {readDatabase,waitIndex} from './browser-storage.mjs';
 import { chromium } from 'playwright';
 import { reviewCard, activeEvents } from '../src/core.js';
 
@@ -11,8 +12,8 @@ const catalog = JSON.parse(await readFile(new URL('../public/data/english/netem-
 const byId = new Map(catalog.map(word => [word.id, word]));
 const key = name => `wenyan-baseline:${name}`;
 const read = (page, name, fallback = null) => page.evaluate(({ name, fallback }) => JSON.parse(localStorage.getItem(name) || JSON.stringify(fallback)), { name: key(name), fallback });
-const session = page => read(page, 'wenyan-session');
-const events = page => read(page, 'wenyan-events-v2', []);
+const session = async page => (await readDatabase(page)).session;
+const events = async page => (await readDatabase(page)).events;
 const ready = page => page.waitForFunction(() => window.__wenyanVocabularyMeta?.status === 'ready');
 async function shot(page, dir, name) {
   await page.screenshot({ path: `${dir}/${name}.png`, animations: 'disabled' });
@@ -33,13 +34,13 @@ async function submit(page, word) {
 async function rate(page, rating) {
   const index = (await session(page)).index;
   await page.locator(`[data-action="word-rate"][data-rating="${rating}"]`).click();
-  await page.waitForFunction(({ key, index }) => JSON.parse(localStorage.getItem(key)).index > index, { key: key('wenyan-session'), index });
+  await waitIndex(page,index);
 }
 async function finishStep(page) {
   const current = await session(page), id = current.queue[current.index], word = byId.get(id).word;
   if (current.steps[current.index] === 'e') {
     await page.locator('#word-input').fill(word);
-    await page.waitForFunction(({ key, index }) => JSON.parse(localStorage.getItem(key)).index > index, { key: key('wenyan-session'), index: current.index });
+    await waitIndex(page,current.index);
   } else {
     await submit(page, word);
     await rate(page, current.current?.hinted || current.current?.firstCorrect === false ? 1 : 3);
@@ -92,7 +93,7 @@ try {
     await page.locator('#word-input').dispatchEvent('keydown', { key: 'Enter', isComposing: true });
     assert.equal((await session(page)).index, 0);
     await page.locator('#word-input').dispatchEvent('compositionend', { data: byId.get(freshId).word });
-    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).index === 1, key('wenyan-session'));
+    await waitIndex(page,0);
     assert.equal(reviewCard(await events(page), `word:${freshId}`).reps, 0);
     while ((await session(page)).queue[(await session(page)).index] !== freshId) await finishStep(page);
     current = await session(page);
@@ -139,7 +140,7 @@ try {
     current = await session(page);
     const backupText = await page.locator('#backup-text').inputValue();
     const exported = JSON.parse(backupText);
-    assert.equal(exported.schema, 2);
+    assert.equal(exported.schema, 3);
     const restoredContext = await browser.newContext({ viewport, reducedMotion: 'reduce' });
     const restored = await restoredContext.newPage();
     restored.on('pageerror', error => errors.push(String(error)));

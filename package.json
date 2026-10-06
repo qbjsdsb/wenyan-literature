@@ -13,13 +13,16 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "ts-fsrs": "^5.2.3",
-    "@phosphor-icons/web": "^2.1.2",
     "@fontsource/ibm-plex-mono": "^5.2.6",
     "@fontsource/noto-sans-sc": "^5.2.9",
-    "@fontsource/noto-serif-sc": "^5.2.8"
+    "@fontsource/noto-serif-sc": "^5.2.8",
+    "@phosphor-icons/web": "^2.1.2",
+    "@supabase/supabase-js": "2.117.2",
+    "ts-fsrs": "5.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "fake-indexeddb": "6.2.5",
     "vite": "^7.1.7"
   }
 }

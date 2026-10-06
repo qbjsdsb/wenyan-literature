@@ -1,0 +1,20 @@
+// Inspect actual IndexedDB; no production dual-write compatibility mirror.
+export async function readDatabase(page,scope='baseline'){
+ return page.evaluate(async name=>{
+  const db=await new Promise((res,rej)=>{const req=indexedDB.open('wenyan-'+name+':wenyan-v3');req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);});
+  const tx=db.transaction(['facts','checkpoints'],'readonly');const all=s=>new Promise((res,rej)=>{const r=tx.objectStore(s).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+  const [facts,cps]=await Promise.all([all('facts'),all('checkpoints')]);db.close();
+  const cp=cps.filter(c=>c.key==='english').sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)).at(-1);
+  return {events:[...facts.map(r=>r.event),...cps.map(c=>({id:'checkpoint-'+c.id,device:c.writer,kind:'session',key:c.key,at:c.at,value:c.value}))].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)),session:cp?.value||null};
+ },scope);
+}
+export async function waitIndex(page,index,scope='baseline'){
+ await page.waitForFunction(async({scope,index})=>{
+  const db=await new Promise(res=>{const r=indexedDB.open('wenyan-'+scope+':wenyan-v3');r.onsuccess=()=>res(r.result);});
+  const cps=await new Promise(res=>{const r=db.transaction('checkpoints').objectStore('checkpoints').getAll();r.onsuccess=()=>res(r.result);});db.close();
+  const cp=cps.filter(c=>c.key==='english').sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)).at(-1);return cp?.value.index>index;
+ },{scope,index});
+}
+export async function resetScope(page,scope){
+ await page.evaluate(async scope=>{window.__wenyanTestClose?.();for(const k of Object.keys(localStorage))if(k.startsWith('wenyan-'+scope+':'))localStorage.removeItem(k);await new Promise((res,rej)=>{const req=indexedDB.deleteDatabase('wenyan-'+scope+':wenyan-v3');req.onsuccess=res;req.onerror=()=>rej(req.error);});},scope);
+}
