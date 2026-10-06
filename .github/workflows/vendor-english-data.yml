@@ -38,7 +38,8 @@ jobs:
       - name: Commit generated snapshot
         shell: bash
         run: |
-          if git diff --quiet -- public/data/english/netem-v1.json public/data/english/netem-v1.meta.json; then
+          changes="$(git status --porcelain -- public/data/english/netem-v1.json public/data/english/netem-v1.meta.json)"
+          if [ -z "$changes" ]; then
             echo "Vocabulary snapshot already current."
             exit 0
           fi
