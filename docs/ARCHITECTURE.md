@@ -83,7 +83,7 @@ Wenyan网页登录与ChatGPT OAuth使用同一Supabase sub，能力不同：web�
 
 MCP用用户授权的RLS client，不能用service_role读取所有数据。server seq/card/projection由窄事务写入；任何特权RPC明确owner/client校验、固定search_path、限制execute权限，不能用definer修权限报错。
 
-OAuth专用aud/resource、PKCE、refresh/revocation、client注册/redirect、PostgREST对专用token兼容是实施前窄验证门槛；未通过不得开放个人MCP。标准OIDC scopes不是wenyan读写权限。详见研究，不自建OAuth。
+OAuth Server当前beta；网站提供小型登录/consent页，SDK读取详情与批准/拒绝，Supabase签发token，不自写OAuth。专用aud/resource、PKCE、refresh/revocation、client注册/redirect、非对称签名/JWKS、PostgREST对专用token兼容是实施前窄验证门槛；未通过不得开放个人MCP。标准OIDC scopes不是wenyan读写权限。详见研究。
 
 ## 7. MCP与AI
 

@@ -57,6 +57,7 @@ Desktop-first、English-first，文学冻结。路线按真实学习闭环推进
 先做窄Auth兼容验证，再领域工具，再安装；不先做内嵌UI/Skill平台。
 
 - Supabase托管OAuth、批准单client、专用resource/aud、用户RLS client；具体兼容门槛见研究。
+- OAuth Server当前beta，保留独立升级验收；网站最小consent页用SDK读取真实client详情并批准/拒绝，固定路径直接打开/刷新可用，非对称签名/JWKS；不自动批准或自行签发token。
 - 一个stateless Edge MCP，五个有界只读工具；结果含证据/窗口/分母/版本/水位/缺失。
 - Inspector与负例通过后，准备个人custom Plugin连接；不提交公共目录、不对外发布。
 - 只读不要求OpenAI API key；模型直接在ChatGPT推理。

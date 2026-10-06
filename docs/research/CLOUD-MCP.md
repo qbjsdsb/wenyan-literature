@@ -110,7 +110,7 @@ GitHub/Google登录增加外部OAuth App配置与账户依赖，先不作为默�
 
 ### OAuth先做窄兼容验证
 
-托管OAuth Server+Edge MCP已有官方路线，但本项目尚未跑通。
+托管OAuth Server+Edge MCP已有官方路线，但本项目尚未跑通。官方getting-started当前仍标OAuth Server为beta；这是一项维护风险，不把托管当作已稳定验收。Wenyan须提供一个很小的登录/consent页，配置Site URL与authorization path，用SDK读取授权详情并approve/deny；页面展示实际client与只读能力，不自动批准陌生client。授权码、token、refresh由Supabase处理，不自己实现。正式部署测试该静态路径直接打开/刷新；采用非对称签名/JWKS校验，不共享JWT secret。
 
 1. 优先预注册一个ChatGPT client，精确redirect URI，关闭开放DCR。surface只能DCR时仅设置阶段打开，批准生成client后关闭并测重连；CIMD读真实discovery不猜。
 2. HTTPS/Streamable HTTP，固定函数resource与Auth issuer。verify_jwt=false如用于discovery放行，函数内工具调用必须认证，不等于公共数据接口。
@@ -213,7 +213,7 @@ Work可完成仓库/代码/tests/migrations/RLS/类型/Edge/部署配置/备份�
 | [OpenAI MCP Auth](https://developers.openai.com/plugins/build/auth) | discovery/resource/PKCE/client注册；不拿API key/管理员token替代 |
 | [MCP 2026-07-28 Auth](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization) | resource server用途/token责任；实施同时核对客户端协议版本 |
 | [Supabase changelog](https://supabase.com/changelog) | Data API自动暴露变更；Node20支持变化；server框架adapter弃用；本项目Node24/原生fetch不需该adapter |
-| [托管OAuth Server](https://supabase.com/docs/guides/auth/oauth-server) | 复用Auth用户第三方授权，无需自建OAuth |
+| [托管OAuth Server](https://supabase.com/docs/guides/auth/oauth-server) / [Getting started](https://supabase.com/docs/guides/auth/oauth-server/getting-started) | 当前beta；复用Auth用户，仍须应用consent页与Site URL/path；SDK批准/拒绝，托管端签发token；非对称签名 |
 | [OAuth flows](https://supabase.com/docs/guides/auth/oauth-server/oauth-flows) | 标准OIDC scopes/default aud/client_id；无自定义scope，不代表表访问授权 |
 | [Token security](https://supabase.com/docs/guides/auth/oauth-server/token-security) | client_id RLS/hook；用途兼容须测试，示例非可照抄安全配置 |
 | [Supabase MCP Auth](https://supabase.com/docs/guides/auth/oauth-server/mcp-authentication) | 新页面已有部署指南；tool搜索旧“无MCP hosting”措辞已过时 |
