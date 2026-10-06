@@ -113,7 +113,10 @@ async function loadCatalog() {
 
 function layerOptions() {
   return Object.entries(ENGLISH_LAYERS)
-    .map(([id, info]) => `<option value="${id}" ${activeLayer === id ? 'selected' : ''}>${info.label} · ${info.limit}词</option>`)
+    .map(([id, info]) => {
+      const count = vocabularyMeta.status === 'ready' ? Math.min(info.limit, vocabularyMeta.total) : info.limit;
+      return `<option value="${id}" ${activeLayer === id ? 'selected' : ''}>${info.label} · ${count}词</option>`;
+    })
     .join('');
 }
 
@@ -127,7 +130,7 @@ function decorateEnglishPage() {
 
   if (badge) {
     badge.textContent = vocabularyMeta.status === 'ready'
-      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 全量${vocabularyMeta.total}词`
+      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词`
       : `基础样本 · ${words.length}词`;
   }
 
@@ -142,7 +145,7 @@ function decorateEnglishPage() {
   if (note) {
     if (vocabularyMeta.status === 'ready') {
       const origin = vocabularyMeta.bundled ? '随 Wenyan 构建发布的固定快照' : '固定提交回退源';
-      note.innerHTML = `词频与释义来自 <a href="${DATASET_PAGE}" target="_blank" rel="noopener">NETEMVocabulary</a>，数据许可 CC BY-NC-SA 4.0。当前使用 ${origin}（${NETEM_SOURCE_COMMIT.slice(0, 12)}），不再跟随上游 master 漂移；完整目录 ${vocabularyMeta.total} 词。`;
+      note.innerHTML = `词频与释义来自 <a href="${DATASET_PAGE}" target="_blank" rel="noopener">NETEMVocabulary</a>，数据许可 CC BY-NC-SA 4.0。当前使用 ${origin}（${NETEM_SOURCE_COMMIT.slice(0, 12)}），不再跟随上游 master 漂移；上游 5530 行规范化为 ${vocabularyMeta.total} 个唯一词条。`;
     } else {
       note.textContent = '当前使用内置基础词组；固定考研词库未能载入时仍可继续练习。';
     }
