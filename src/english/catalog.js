@@ -60,7 +60,7 @@ export function resolveEnglishLayer(value) {
   return Object.hasOwn(ENGLISH_LAYERS, value) ? value : DEFAULT_ENGLISH_LAYER;
 }
 
-export function selectActiveCatalog(catalog, seedWords = [], layer = DEFAULT_ENGLISH_LAYER) {
+export function selectActiveCatalog(catalog, seedWords = [], layer = DEFAULT_ENGLISH_LAYER, preserveIds = []) {
   const selectedLayer = resolveEnglishLayer(layer);
   const limit = Math.min(ENGLISH_LAYERS[selectedLayer].limit, catalog.length);
   const selected = catalog.slice(0, limit).map(item => ({ ...item }));
@@ -72,6 +72,17 @@ export function selectActiveCatalog(catalog, seedWords = [], layer = DEFAULT_ENG
     const id = normalizeWordId(seed?.id ?? seed?.word);
     if (!id || selectedIds.has(id)) continue;
     selected.push({ ...(byId.get(id) ?? seed), id });
+    selectedIds.add(id);
+  }
+
+  // An unfinished session is stronger than the selected learning layer. Keep its
+  // remaining words resolvable until the group is completed, even after a layer switch.
+  for (const rawId of preserveIds) {
+    const id = normalizeWordId(rawId);
+    if (!id || selectedIds.has(id)) continue;
+    const item = byId.get(id);
+    if (!item) continue;
+    selected.push({ ...item });
     selectedIds.add(id);
   }
 
