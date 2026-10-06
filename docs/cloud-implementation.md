@@ -47,6 +47,8 @@ npm run build
 
 `.github/workflows/deploy-pages.yml` 只允许 workflow_dispatch，不由 Draft push 发布。依照 [GitHub 官方 custom workflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) 配置 Pages；配置需通过正常 Git 审查收入默认分支后才可从 Actions 手动触发，不自动合并。仓库 variables 仅放 `VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY` 和真实云验收后才设置的 `WENYAN_CLOUD_READY=true`。
 
+为了不合并未验收的 Draft，`validate-pages.yml` 提供一次明确触发的 HTTPS 验证构建：仅本仓库 #14、指定 head 分支、添加指定标签时运行，checkout 精确事件 head SHA，先运行测试与真实托管 public preflight，再构建 `.env.example` 的公开配置。独立 `wenyan-validation` environment；无 secret，无学习事实，普通推送不发布。该部署是正向登录/同步的验证入口，不绕过正式 READY 门槛或宣称生产完成。
+
 管理面启用 Pages、固定实际 HTTPS origin、Auth site URL/精确 callback、禁用托管注册/匿名、绑定 owner 和真实安全验收均由 Work 在登录后完成。构建拒绝 secret/service_role browser key；不使用管理员 token 部署前端。rollback 选可读写 v3 的旧构建，不能退回 main 的 v2 writer。未来 MCP consent/受保护资源 discovery 需另做真实验证，当前没有 mock Plugin 成功。
 
 目前大时钟漂移隔离/恢复尚未完成：不要手改事实时间强行清空 outbox。SQL 的 received_at 保留服务器接收审计，未来时间超一天拒绝，本机 effective at 保证同设备单调。托管验收必须包含系统时间向前/向后改变、重开与多设备迟到重放。
