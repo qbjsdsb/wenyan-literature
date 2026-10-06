@@ -20,7 +20,21 @@
 - **训练**：先回忆再看参考提纲；文学名词解释/简答/论述自评；英语跟打、默写、听写、错词订正。
 - **本机备份**：导出 JSON 或复制完整备份文字；导入后合并去重并恢复续学。
 
-文学内容目前仍是小样，下一阶段重点是 **P0 现当代文学专题 + 2023—2026 真题关联**。英语已从 24 个演示词升级为真实考研词库接入，但 PR #3 在完成运行验收前保持 Draft。
+### 当前优先级：English-first
+
+现在先把英语模块做到**可以每天长期使用**。文学内容、文学真题和文学“今日任务”暂时后置，不与英语并行扩张。
+
+英语接下来依次解决：
+
+1. PR #3 真实运行与 Android 真机验收。
+2. 固定可离线的考研词库快照与 1200 / 2444 / 5530 分层。
+3. 智能队列：到期复习 → 错词 → 未完成组 → 新词。
+4. 错词本、收藏、已掌握、轻量统计和快捷键。
+5. 音标、词性、核心高频义与发音体验。
+6. 高频难词的语境挖空强化。
+7. 英语本地体验稳定后做单人薄云同步，完成电脑 ↔ 手机连续学习。
+
+详细路线见 [`docs/english/PLAN.md`](docs/english/PLAN.md)。
 
 ## 先从这里接手
 
@@ -29,23 +43,25 @@
 1. [`AGENTS.md`](AGENTS.md) — 开发原则与禁止过度工程化边界。
 2. [`docs/README.md`](docs/README.md) — 文档总导航。
 3. [`docs/开发进度.md`](docs/开发进度.md) — **当前状态唯一事实源**。
-4. [`docs/ROADMAP.md`](docs/ROADMAP.md) — 下一步优先级与完成标准。
-5. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 数据、模块和兼容边界。
+4. [`docs/ROADMAP.md`](docs/ROADMAP.md) — 当前 English-first 总优先级与完成标准。
+5. [`docs/english/PLAN.md`](docs/english/PLAN.md) — 当前英语专项产品与技术路线。
+6. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 数据、模块和兼容边界。
 
 ## 英语词汇
 
-英语训练交互参考 Qwerty Learner、TypeWords 等成熟打字背词产品，但不复制其 GPL 程序代码。Wenyan 继续使用自身 MIT 代码，并保留：
+英语训练交互参考 Qwerty Learner、TypeWords、Clozemaster 等成熟产品，但不直接混入会改变仓库许可义务的程序代码。Wenyan 保留自身轻量实现，并继续强化：
 
 - 跟打、默写、听写
 - 首次答错记录与强制订正
-- 收藏、已掌握
+- 收藏、已掌握、错词强化
 - 到期优先、新词限额
 - FSRS 复习安排
 - 半组刷新续学
+- 高频优先与后续语境强化
 
-词频与中文释义来自 [`exam-data/NETEMVocabulary`](https://github.com/exam-data/NETEMVocabulary)。上游说明该数据以 2024 考研英语（一）大纲 5530 词为基础，并结合约 200 套四六级、考研英语、专四专八试卷文本排序；数据许可为 CC BY-NC-SA 4.0。完整说明见 [`docs/third-party/NETEMVocabulary-DATA.md`](docs/third-party/NETEMVocabulary-DATA.md)。
+词频与中文释义当前来自 [`exam-data/NETEMVocabulary`](https://github.com/exam-data/NETEMVocabulary)。上游说明该数据以 2024 考研英语（一）大纲 5530 词为基础，并结合约 200 套四六级、考研英语、专四专八试卷文本排序；数据许可为 CC BY-NC-SA 4.0。完整说明见 [`docs/third-party/NETEMVocabulary-DATA.md`](docs/third-party/NETEMVocabulary-DATA.md)。
 
-首次联网会下载完整目录并缓存在当前浏览器；失败时自动回退到原有 24 词，不阻塞学习。为避免手机一次渲染 5530 行并控制长期复习计算成本，当前先激活词频靠前的 1200 词，同时强制保留旧版 24 个种子词以兼容历史记录。
+当前 PR #3 首次联网下载完整目录并缓存，先激活词频靠前的 1200 词，同时强制保留旧版 24 个种子词以兼容历史记录。下一阶段计划固定明确的数据 release / commit，并生成 Wenyan 自己的规范化静态快照，让首次正式使用不再依赖第三方 CDN。
 
 ## 运行
 
@@ -72,13 +88,13 @@ python3 -m http.server 8000 --directory dist
 
 ## 数据保存
 
-文学小样在 `src/content.js`；英语扩展词库由 `src/english-vocab.js` 运行时加载。
+文学小样在 `src/content.js`；英语扩展词库当前由 `src/english-vocab.js` 运行时加载。
 
 个人学习状态保存在当前浏览器 localStorage，主要键为 `wenyan-events-v2`。每次学习动作先保存本机，刷新/重开保留，英语半组与阅读位置可续接。原有 `wenyan-progress-v1` 保留，旧版位于 `legacy/`。
 
 考研词汇完整目录使用独立缓存键 `wenyan-netem-catalog-v1`，不混入学习记录备份；缓存丢失后可重新获取。词条 ID 继续使用规范化英文单词，旧 v0.1 的复习记录、收藏和未完成训练不因换词库被重写。
 
-沿用 schema 2 事件记录与 `ts-fsrs`。跟打只记输入练习，回忆自评才影响排程；首次错误不会因订正刷新变成正确。
+沿用 schema 2 事件记录与 `ts-fsrs`。跟打只记输入练习，主动回忆评价才影响长期排程；首次错误不会因订正刷新变成正确。
 
 在“偏好与备份”导出；换浏览器或设备后导入可手动继续。重复导入不增加相同记录。错误备份整份拒绝；保存失败会提示导出，不假报成功。
 
@@ -113,8 +129,10 @@ Web v0.1 基线：
 ├── docs/
 │   ├── README.md          # 文档导航
 │   ├── 开发进度.md       # 当前状态唯一事实源
-│   ├── ROADMAP.md         # 迭代顺序与完成标准
+│   ├── ROADMAP.md         # 总迭代顺序与完成标准
 │   ├── ARCHITECTURE.md    # 稳定边界
+│   ├── english/
+│   │   └── PLAN.md        # 当前英语专项路线
 │   ├── design/            # 设计基准与 QA
 │   └── third-party/       # 第三方来源与许可证
 └── .github/
@@ -125,12 +143,14 @@ Web v0.1 基线：
 
 ## 下一阶段
 
-按 [`docs/ROADMAP.md`](docs/ROADMAP.md) 执行：
+按 [`docs/ROADMAP.md`](docs/ROADMAP.md) 和 [`docs/english/PLAN.md`](docs/english/PLAN.md) 执行：
 
 1. 完成英语词汇 v1 的真实运行 / 真机验收。
-2. 接入 P0 现当代文学专题与 2023—2026 真题关联。
-3. 让“今日”由真实学习状态驱动。
-4. 再做一个人的薄云同步。
-5. 连续使用后只针对真实痛点优化交互、排程和视觉。
+2. 固定词库快照并完成三层学习范围。
+3. 做智能队列与错词闭环。
+4. 完善词条信息、统计、键盘/手机体验。
+5. 再做语境强化。
+6. 英语本地版稳定后做一个人的薄云同步。
+7. **之后**才恢复文学 P0 内容与真题开发。
 
 MIT。字体、图标、FSRS 与第三方数据许可说明统一放在 `docs/third-party/`。
