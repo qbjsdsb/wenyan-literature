@@ -20,20 +20,34 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.63.0
           npx playwright install --with-deps chromium
-      - name: Build
+      - name: Build static output
         run: npm run build
-      - name: Start preview
+      - name: Serve built output at root and subpath
         run: |
-          npm run start -- --host 127.0.0.1 --port 4173 > /tmp/wenyan-preview.log 2>&1 &
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then
-              exit 0
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist > /tmp/wenyan-root.log 2>&1 &
+          mkdir -p /tmp/wenyan-site/desktop
+          cp -R dist/. /tmp/wenyan-site/desktop/
+          python3 -m http.server 4174 --bind 127.0.0.1 --directory /tmp/wenyan-site > /tmp/wenyan-subpath.log 2>&1 &
+          for url in http://127.0.0.1:4173/ http://127.0.0.1:4174/desktop/; do
+            ready=0
+            for i in {1..30}; do
+              if curl -fsS "$url" >/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ]; then
+              cat /tmp/wenyan-root.log || true
+              cat /tmp/wenyan-subpath.log || true
+              exit 1
             fi
-            sleep 1
           done
-          cat /tmp/wenyan-preview.log
-          exit 1
-      - name: Desktop browser smoke
+      - name: Smoke built output at root
         env:
           WENYAN_BASE_URL: http://127.0.0.1:4173/
+        run: node tests/browser-smoke.mjs
+      - name: Smoke built output at subpath
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
         run: node tests/browser-smoke.mjs
