@@ -49,11 +49,25 @@ async function freshPage(context, scope = 'baseline', hash = 'english') {
   return page;
 }
 
+async function openOptions(page) {
+  if (!(await page.locator('.learning-options').getAttribute('open'))) {
+    // An open boolean attribute serializes to an empty string.
+    if (!(await page.locator('#new-limit').isVisible())) await page.locator('.learning-options summary').click();
+  }
+}
+async function chooseLayer(page, layer) {
+  await openOptions(page);
+  await page.locator('#vocab-layer').selectOption(layer);
+  await page.waitForFunction(layer => window.__wenyanVocabularyMeta?.layer === layer, layer);
+  assert.equal(await page.locator('#vocab-layer').evaluate(el => document.activeElement === el), true, '切层后保持配置键盘焦点');
+}
 async function startMode(page, mode, newLimit = '6') {
   await page.goto(`${baseUrl}?test=baseline#english`, { waitUntil: 'domcontentloaded' });
   await waitVocabulary(page);
-  await page.locator(`[data-action="mode"][data-mode="${mode}"]`).click();
+  await openOptions(page);
   await page.locator('#new-limit').selectOption(newLimit);
+  await page.locator('.free-practice summary').click();
+  await page.locator(`[data-action="mode"][data-mode="${mode}"]`).click();
   await page.locator('[data-action="start-words"]').click();
   await page.waitForURL(/#train$/);
   await page.locator('#word-input').waitFor();
@@ -95,16 +109,16 @@ try {
   let meta = await waitVocabulary(page);
   assert.equal(meta.total, 5528, '固定考研词库应为 5528 个稳定词条');
   assert.equal(meta.layer, 'core');
-  await page.locator('#vocab-layer').waitFor();
-  assert.match(await page.locator('.page-heading .muted').innerText(), /核心学习集 · 1200词/);
+  await page.locator('#vocab-layer').waitFor({ state: 'attached' });
+  assert.equal(meta.active, 1200);
 
-  await page.locator('#vocab-layer').selectOption('high');
+  await chooseLayer(page, 'high');
   await page.waitForFunction(() => window.__wenyanVocabularyMeta?.layer === 'high');
-  assert.match(await page.locator('.page-heading .muted').innerText(), /高频学习集 · 2444词/);
+  assert.equal((await waitVocabulary(page)).active, 2444);
 
-  await page.locator('#vocab-layer').selectOption('full');
+  await chooseLayer(page, 'full');
   await page.waitForFunction(() => window.__wenyanVocabularyMeta?.layer === 'full');
-  assert.match(await page.locator('.page-heading .muted').innerText(), /完整学习集 · 5528词/);
+  assert.equal((await waitVocabulary(page)).active, 5528);
 
   await page.locator('[data-action="search"]').first().click();
   await page.locator('#search-input').fill(lowestRankWord.word);
@@ -112,13 +126,8 @@ try {
   assert.ok(fullSearchText.toLowerCase().includes(lowestRankWord.word.toLowerCase()), '完整层应能搜到最低频词');
   await page.locator('[data-action="close-panel"]').click();
 
-  await page.locator('#vocab-layer').selectOption('core');
-  await page.waitForFunction(() => window.__wenyanVocabularyMeta?.layer === 'core');
-  await page.locator('[data-action="mode"][data-mode="recall"]').click();
-  await page.locator('#new-limit').selectOption('6');
-  await page.locator('[data-action="start-words"]').click();
-  await page.waitForURL(/#train$/);
-  await page.locator('#word-input').waitFor();
+  await chooseLayer(page, 'core');
+  await startMode(page, 'recall');
 
   let session = await readSession(page);
   assert.ok(session && session.queue.length >= 1 && session.queue.length <= 24, '智能开始应创建有效训练组');
@@ -222,13 +231,7 @@ try {
   const followEvents = await readEvents(followPage);
   assert.ok(followEvents.some(event => event.kind === 'typing' && event.key === `word:${followFirstId}`), '跟打应记录 typing');
   assert.ok(!followEvents.some(event => event.kind === 'review' && event.key === `word:${followFirstId}`), '跟打不能冒充主动 review');
-  await followPage.goto(`${baseUrl}?test=baseline#english`, { waitUntil: 'domcontentloaded' });
-  await waitVocabulary(followPage);
-  await followPage.locator('[data-action="mode"][data-mode="follow"]').click();
-  await followPage.locator('#new-limit').selectOption('6');
-  await followPage.locator('[data-action="start-words"]').click();
-  await followPage.waitForURL(/#train$/);
-  await followPage.locator('#word-input').waitFor();
+  await startMode(followPage, 'follow', '6');
   const secondGroup = await readSession(followPage);
   assert.equal(secondGroup.queue.length, 6, '连续训练第二组应按新词额度创建');
   await completeFollowWords(followPage, 6);
@@ -263,3 +266,4 @@ try {
 } finally {
   await browser.close();
 }
+

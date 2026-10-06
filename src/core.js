@@ -1,5 +1,6 @@
 import { createEmptyCard, fsrs, Rating } from 'ts-fsrs';
 import { ENGLISH_MODES } from './english/config.js';
+import { validSmartPlan } from './english/session.js';
 
 export const scheduler = fsrs({enable_fuzz:false});
 export const DAY = 86400000;
@@ -13,7 +14,7 @@ export function validEvent(e) {
   if(e.kind==='task')return typeof v.done==='boolean';
   if(e.kind==='favorite'||e.kind==='mastered')return typeof v.on==='boolean';
   if(e.kind==='undo')return typeof v.id==='string' && /^[a-zA-Z0-9-]{8,80}$/.test(v.id);
-  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode):typeof v.article==='string');
+  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode)&&validSmartPlan(v):typeof v.article==='string');
   return false;
 }
 export function mergeEvents(...lists) {

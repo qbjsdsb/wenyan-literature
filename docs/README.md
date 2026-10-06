@@ -17,16 +17,9 @@
 
 旧 PR #2—#10 是历史 stacked PR，保留追溯价值，但不再继续向上叠开发。
 
-当前 main 候选：
+正式基线为远端最新 `main`，PR #11 已合入。当前续接工作：PR #12 `feature/english-experience-v2`（Draft），从 main 直接创建。
 
-`integration/desktop-english-baseline-v1`
-
-当前规则：
-- Desktop-first。
-- English-first。
-- 文学冻结。
-- 手机端专项冻结。
-- 先桌面验收，再收拢 main。
+当前规则：Desktop-first、English-first、文学冻结。先审计真实体验，再局部改进 Smart Session 和桌面学习层级，不自动合并或发布。
 
 ## 文档分类
 
@@ -37,6 +30,8 @@
 - [`../evidence/`](../evidence/)：与历史验收对应的截图。
 
 ### 当前专项：英语
+- [`english/EXPERIENCE-AUDIT.md`](english/EXPERIENCE-AUDIT.md)：本轮实施前真实 UX 审计。
+- [`english/EXPERIENCE-VALIDATION.md`](english/EXPERIENCE-VALIDATION.md)：本轮生产构建验证与视觉对比。
 - [`english/PLAN.md`](english/PLAN.md)：英语产品原则、已完成能力和后续阶段。
 - [`english/MAINTAINABILITY-AUDIT.md`](english/MAINTAINABILITY-AUDIT.md)：已处理与刻意后置的英语维护问题。
 
@@ -70,7 +65,8 @@ README
 → ROADMAP
 → english/PLAN
 → english/VALIDATION
-→ 实际整合分支代码
+→ 远端最新 main / 当前 Draft 分支代码
 ```
 
 如果文档与远端实际状态冲突，**以实际远端为准，并立即修正 `docs/开发进度.md`**。
+

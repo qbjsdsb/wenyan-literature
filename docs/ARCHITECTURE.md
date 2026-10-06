@@ -112,15 +112,15 @@ AI 可以整理和表达，但不能把自己当知识来源。
 
 ## 6. 当前已知结构债
 
-### 英语页二次装饰
-当前 `app.js` 先渲染英语页，`english-vocab.js` 再通过 `MutationObserver` 补部分词库 UI。
+### 已收敛的英语渲染边界（Experience v2）
 
-这不是理想长期边界，但当前能工作。只有真实使用或维护成本证明值得时，再单独收敛，不与功能验收混改。
+`english-vocab.js` 只负责异步快照 / enrichment、层级、兼容与 carryover。导出 `initializeVocabulary({getPendingWordIds})`、`getVocabularyState()`、`activeLearningIds()`、`changeEnglishLayer()`、`findEnglishWord()`、`searchEnglishWords()`。
 
-### session 全局只读 hook
-当前词库层通过只读全局 hook 获取未完成 session 要保留的词 ID。
+`app.js` 显式初始化，加载完成收到 `wenyan-vocabulary-loaded` 后重渲染；所有词库 UI 一次由 app.js 渲染。移除 MutationObserver 和 session 全局 hook。只读 `__wenyanVocabularyMeta` 保留给既有 smoke / 诊断，不作为业务状态接口。全词库搜索不切换活动层；carryover 不进入正式新词池。
 
-行为明确，但接口不够正式；以后如果整理英语渲染 / 状态边界，可一并收敛。
+`english/smart.js` 是组计划和步骤完成 / undo / 组反馈的领域逻辑；`english/session.js` 包含可选 Smart 计划校验和旧 session helper。core 只校验 optional plan，不导入 queue，避免领域依赖环。
+
+Smart 计划复用 session 的 queue/index/results，追加 `smart:1` 与紧凑 `steps` 字符串；当前步骤可含 `phase`。既有 schema、queue 50 / event value 8192 限制不变，预算预留接触与一次回流。没有第二套数据库或派生 FSRS 存储。
 
 ### session 历史增长
 当前 session 更新会追加状态事件。长期使用前要观察备份体积和存储增长。
@@ -154,3 +154,4 @@ AI 可以整理和表达，但不能把自己当知识来源。
 - 真实桌面性能数据证明当前实现不够。
 
 “看起来更规范”本身不是拆分理由。
+

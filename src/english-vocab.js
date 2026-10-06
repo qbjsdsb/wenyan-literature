@@ -19,7 +19,7 @@ import {
 } from './english/catalog.js';
 import { applyLexiconEnrichment } from './english/lexicon.js';
 
-const DATASET_PAGE = `https://github.com/${NETEM_SOURCE_REPO}`;
+export const DATASET_PAGE = `https://github.com/${NETEM_SOURCE_REPO}`;
 
 function publicAssetUrl(path) {
   const base = typeof import.meta.env?.BASE_URL === 'string' ? import.meta.env.BASE_URL : '/';
@@ -38,6 +38,8 @@ const seedWords = words.map(word => ({ ...word }));
 const seedById = new Map(seedWords.map(word => [word.id.toLowerCase(), word]));
 let catalog = null;
 let lexiconPayload = null;
+let enrichedCatalog = [];
+let pendingWordIds = () => [];
 let activeLayer = readLayer();
 
 export const vocabularyMeta = {
@@ -99,9 +101,10 @@ function activate(nextCatalog, {
   if (!isCompleteCatalog(nextCatalog)) return false;
   catalog = nextCatalog;
   const enriched = lexiconPayload ? applyLexiconEnrichment(catalog, lexiconPayload) : catalog;
+  enrichedCatalog = enriched.map(withRuntimeFields);
   const layerSize = englishLayerLimit(activeLayer, enriched.length);
   const compatibleActive = selectActiveCatalog(enriched, seedWords, activeLayer);
-  const pendingIds = globalThis.__wenyanActiveEnglishSessionIds?.() ?? [];
+  const pendingIds = pendingWordIds();
   const active = selectActiveCatalog(enriched, seedWords, activeLayer, pendingIds).map(withRuntimeFields);
   words.splice(0, words.length, ...active);
   Object.assign(vocabularyMeta, {
@@ -162,62 +165,7 @@ async function loadLexicon() {
   }
 }
 
-function layerOptions() {
-  return Object.entries(ENGLISH_LAYERS)
-    .map(([id, info]) => {
-      const count = vocabularyMeta.status === 'ready'
-        ? englishLayerLimit(id, vocabularyMeta.total)
-        : info.limit ?? '全部';
-      return `<option value="${id}" ${activeLayer === id ? 'selected' : ''}>${info.label} · ${count}${typeof count === 'number' ? '词' : ''}</option>`;
-    })
-    .join('');
-}
-
-function decorateEnglishPage() {
-  const page = document.querySelector('.english-page');
-  if (!page) return;
-  const badge = page.querySelector('.page-heading .muted');
-  const lead = page.querySelector('.lead');
-  const note = page.querySelector('.source-note');
-  const newLimit = page.querySelector('#new-limit')?.closest('label');
-
-  if (badge) {
-    const extras = [
-      vocabularyMeta.compatibility ? `兼容保留${vocabularyMeta.compatibility}词` : '',
-      vocabularyMeta.carryover ? `续学保留${vocabularyMeta.carryover}词` : ''
-    ].filter(Boolean);
-    badge.textContent = vocabularyMeta.status === 'ready'
-      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词${extras.length ? ` · ${extras.join(' · ')}` : ''}`
-      : `兼容词组 · ${words.length}词`;
-  }
-
-  if (lead && vocabularyMeta.status === 'ready') {
-    lead.textContent = '到期复习优先；新词按固定考研词频顺序进入训练。';
-  }
-
-  if (vocabularyMeta.status === 'ready' && newLimit && !page.querySelector('#vocab-layer')) {
-    newLimit.insertAdjacentHTML('afterend', `<label class="small-control">词库范围 <select id="vocab-layer">${layerOptions()}</select></label>`);
-  }
-
-  if (note) {
-    if (vocabularyMeta.status === 'ready') {
-      const origin = vocabularyMeta.bundled ? '随 Wenyan 构建发布的固定快照' : '固定提交回退源';
-      const lexiconParts = [
-        vocabularyMeta.phoneticCount ? `${vocabularyMeta.phoneticCount} 词音标` : '',
-        vocabularyMeta.exchangeCount ? `${vocabularyMeta.exchangeCount} 词词形` : '',
-        vocabularyMeta.posCount ? `${vocabularyMeta.posCount} 词词性` : ''
-      ].filter(Boolean);
-      const lexicon = vocabularyMeta.lexicon && lexiconParts.length
-        ? `；另由固定 ECDICT enrichment 补充 ${lexiconParts.join(' / ')}`
-        : '';
-      note.innerHTML = `词频与释义来自 <a href="${DATASET_PAGE}" target="_blank" rel="noopener">NETEMVocabulary</a>，数据许可 CC BY-NC-SA 4.0。当前使用 ${origin}（${NETEM_SOURCE_COMMIT.slice(0, 12)}）；上游 ${vocabularyMeta.sourceCount} 行规范化为 ${vocabularyMeta.total} 个稳定词条${lexicon}。`;
-    } else {
-      note.textContent = '固定考研词库未能载入；当前只保留兼容词组，学习记录不会被删除。';
-    }
-  }
-}
-
-function changeLayer(value) {
+export function changeEnglishLayer(value) {
   const next = resolveEnglishLayer(value);
   if (next === activeLayer) return;
   activeLayer = next;
@@ -229,27 +177,34 @@ function changeLayer(value) {
   });
 }
 
-const app = document.getElementById('app');
-if (app) new MutationObserver(decorateEnglishPage).observe(app, { childList: true });
-
-document.addEventListener('change', event => {
-  if (event.target?.id === 'vocab-layer') changeLayer(event.target.value);
-});
-
-window.addEventListener('wenyan-vocabulary-loaded', () => {
-  if (['#english', '#train'].includes(location.hash)) window.dispatchEvent(new Event('hashchange'));
-  else decorateEnglishPage();
-});
-
-window.__wenyanVocabularyMeta = { ...vocabularyMeta };
-decorateEnglishPage();
-Promise.all([loadCatalog(), loadLexicon()])
-  .then(([result, lexicon]) => {
-    lexiconPayload = lexicon;
-    activate(result.catalog, result);
-  })
-  .catch(() => {
-    vocabularyMeta.status = 'sample';
-    window.__wenyanVocabularyMeta = { ...vocabularyMeta };
-    window.dispatchEvent(new CustomEvent('wenyan-vocabulary-loaded', { detail: { ...vocabularyMeta } }));
-  });
+// One data interface; app.js owns all DOM rendering. The read-only global is
+// retained for existing browser smoke / diagnostics, never used as state.
+export function getVocabularyState() {
+  return { ...vocabularyMeta, lexiconSource: lexiconPayload?.source ? { ...lexiconPayload.source } : null };
+}
+export function activeLearningIds() {
+  return catalog ? new Set(catalog.slice(0, englishLayerLimit(activeLayer, catalog.length)).map(word => word.id)) : new Set(words.map(word => word.id));
+}
+export function findEnglishWord(id) {
+  return words.find(word => word.id === id) || enrichedCatalog.find(word => word.id === id);
+}
+export function searchEnglishWords(query, limit = 5) {
+  const text = query.trim().toLowerCase();
+  if (!text) return [];
+  const pool = enrichedCatalog.length ? enrichedCatalog : words;
+  return pool.filter(word => (word.word + word.meaning).toLowerCase().includes(text)).slice(0, limit);
+}
+export function initializeVocabulary({ getPendingWordIds = () => [] } = {}) {
+  pendingWordIds = getPendingWordIds;
+  window.__wenyanVocabularyMeta = { ...vocabularyMeta };
+  return Promise.all([loadCatalog(), loadLexicon()])
+    .then(([result, lexicon]) => {
+      lexiconPayload = lexicon;
+      activate(result.catalog, result);
+    })
+    .catch(() => {
+      vocabularyMeta.status = 'sample';
+      window.__wenyanVocabularyMeta = { ...vocabularyMeta };
+      window.dispatchEvent(new CustomEvent('wenyan-vocabulary-loaded', { detail: { ...vocabularyMeta } }));
+    });
+}
