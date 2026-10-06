@@ -9,7 +9,22 @@
 - **训练**：先回忆再看参考提纲，名词解释/简答/论述自评；英语跟打、默写、听写、错词订正。
 - **本机备份**：导出 JSON 或复制完整备份文字；导入 JSON 文件或粘贴备份，合并去重并恢复续学。
 
-内容目前为两篇文学阅读样本、配套自编练习和24个基础词。不是完整考研资料库；自编题与提纲不冒充院校真题或标准答案。
+文学内容目前仍是两篇阅读样本与配套自编练习。英语已从 24 个演示词升级为真实考研词库接入：运行时读取 `exam-data/NETEMVocabulary` 的 5530 词词频数据，默认激活词频靠前的 1200 词，并额外保留旧版 24 个种子词以兼容已有记录。不是完整文学考研资料库；自编题与提纲不冒充院校真题或标准答案。
+
+## 英语词汇
+
+英语训练交互参考 Qwerty Learner、TypeWords 等成熟打字背词产品，但不复制其 GPL 程序代码。Wenyan 继续使用自身 MIT 代码，并保留现有的：
+
+- 跟打、默写、听写
+- 首次答错记录与强制订正
+- 收藏、已掌握
+- 到期优先、新词限额
+- FSRS 复习安排
+- 半组刷新续学
+
+词频与中文释义来自 [`exam-data/NETEMVocabulary`](https://github.com/exam-data/NETEMVocabulary)。上游说明该数据以 2024 考研英语（一）大纲 5530 词为基础，并结合约 200 套四六级、考研英语、专四专八试卷文本排序；数据许可为 CC BY-NC-SA 4.0。完整说明见 [`docs/third-party/NETEMVocabulary-DATA.md`](docs/third-party/NETEMVocabulary-DATA.md)。
+
+首次联网会下载完整目录并缓存在当前浏览器；失败时自动回退到原有 24 词，不阻塞学习。为了避免手机一次渲染 5530 行并让复习计算越来越慢，当前训练集先使用前 1200 个高频词，同时保留完整目录缓存，为后续分层词库、全量搜索和低频词阶段预留数据。
 
 ## 运行
 
@@ -38,7 +53,9 @@ python3 -m http.server 8000 --directory dist
 
 ## 数据保存
 
-内容在 `src/content.js`；学习状态在当前浏览器的 localStorage，主要键为 `wenyan-events-v2`。每次学习动作先保存本机，刷新/重开保留，英语半组与阅读位置可续接。原有 `wenyan-progress-v1` 保留，旧版位于 `legacy/`。
+文学小样在 `src/content.js`；英语扩展词库由 `src/english-vocab.js` 运行时加载。学习状态在当前浏览器的 localStorage，主要键为 `wenyan-events-v2`。每次学习动作先保存本机，刷新/重开保留，英语半组与阅读位置可续接。原有 `wenyan-progress-v1` 保留，旧版位于 `legacy/`。
+
+考研词汇完整目录使用独立缓存键 `wenyan-netem-catalog-v1`，不混入学习记录备份；缓存丢失后可重新从公开数据源获取。词条 ID 仍以规范化英文单词为稳定 ID，旧 v0.1 的复习记录、收藏和未完成训练不会因换词库被重写。
 
 沿用恢复原型的 schema 2 记录格式和 ts-fsrs，不改用户已有记录格式。跟打只记输入练习，回忆自评才影响排程；首次错误不会因订正刷新变成正确。没有新增通用状态框架或同步协议。
 
@@ -48,21 +65,24 @@ python3 -m http.server 8000 --directory dist
 
 ## 验证与边界
 
-8项 Node 自带测试通过，构建通过；真实浏览器已走通阅读、回忆、英语订正、刷新续学、备份文字恢复和文件导入。六种宽度及430px短视口检查见 [验收记录](docs/web-v0.1-validation.md)。未发现应用来源的 console error；浏览器扩展自身的报错单独记录。
+v0.1 基线的 8 项 Node 自带测试与构建已通过；真实浏览器已走通阅读、回忆、英语订正、刷新续学、备份文字恢复和文件导入。六种宽度及 430px 短视口检查见 [验收记录](docs/web-v0.1-validation.md)。
+
+英语词库升级保持原学习记录 schema，不复制 GPL 项目代码。新增运行时词库层仍需在合并前用真实浏览器验证首次联网加载、缓存后二次启动、断网回退和 Android 长词表性能。
 
 视口夹具不等于真实 Android 系统键盘/语音测试。测试环境的文件下载事件未能确认；可复制完整 JSON 的备份及文件/文字导入已验证。真机下载、键盘、安全区实际值和语音仍需用户设备试用。
 
 ## 文件与接手
 
 - `src/app.js` / `src/style.css`：界面与交互。
-- `src/content.js`：小样内容，后续真实内容接入口。
+- `src/content.js`：文学小样与 24 个兼容种子词。
+- `src/english-vocab.js`：真实考研词汇目录加载、缓存、降级和兼容层。
 - `src/core.js` / `src/storage.js` / `src/backup.js`：复习、本机保存、备份。
 - `tests/`：重要状态逻辑测试、设备宽度夹具。
 - [开发进度](docs/开发进度.md)：恢复来源、验证与下一阶段。
 - [AGENTS.md](AGENTS.md)：单人、轻量、原生 JS 开发约定。
 
-内容审计与来源目录继续由 [Draft PR #1](https://github.com/qbjsdsb/wenyan-literature/pull/1) 维护，本 Web 分支不改它。
+内容审计与来源目录继续由 [Draft PR #1](https://github.com/qbjsdsb/wenyan-literature/pull/1) 维护；Web v0.1 由 Draft PR #2 维护。英语词库升级应作为 v0.1 之上的独立增量，不把两个既有 PR 搅在一起。
 
-下一阶段只记录：Phase 2 补 P0现当代文学专题、2023—2026真题及知识关联；Phase 3 单人薄云同步；Phase 4 本人连续使用后按真实痛点改交互、排程和视觉。
+下一阶段：继续补 P0 现当代文学专题、2023—2026 真题及知识关联；英语侧在真实使用后再决定是否开放 5530 全量分层与语境例句；随后接单人薄云同步。
 
-MIT。字体、图标与FSRS许可证在 `docs/third-party/`。
+MIT。字体、图标与 FSRS 许可证在 `docs/third-party/`；NETEMVocabulary 数据许可说明单独保留。
