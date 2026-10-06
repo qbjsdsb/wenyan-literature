@@ -30,6 +30,16 @@ test('first correct rate only treats successful unaided active recall as correct
   assert.equal(englishDailyStats(events, now).firstCorrectRate, 25);
 });
 
+test('legacy reviews without firstCorrect remain counted as reviews but not as accuracy evidence', () => {
+  const events = [
+    evt('aaaaaaaa-a101', 'review', 'word:legacy', morning, { rating: 3 }),
+    evt('bbbbbbbb-b202', 'review', 'word:new', morning + 1, { rating: 3, firstCorrect: true, hinted: false })
+  ];
+  const stats = englishDailyStats(events, now);
+  assert.equal(stats.reviewed, 2);
+  assert.equal(stats.firstCorrectRate, 100);
+});
+
 test('typing-only follow practice does not affect active recall rate', () => {
   const events = [
     evt('aaaaaaaa-a555', 'typing', 'word:a', morning, { correct: true, session: 's' }),

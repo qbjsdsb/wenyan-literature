@@ -9,17 +9,24 @@ import {
   selectActiveCatalog
 } from '../src/english/catalog.js';
 
-test('normalizes upstream rows, sorts by rank, and removes duplicate ids', () => {
+test('normalizes upstream rows, sorts by rank, and merges duplicate ids without losing senses', () => {
   const rows = [
     { 序号: 2, 单词: 'Ability', 释义: '能力', 词频: 10 },
     { 序号: 1, 单词: 'abandon', 释义: '放弃', 词频: 20 },
-    { 序号: 3, 单词: 'ABILITY', 释义: '能力（重复）', 词频: 9 },
+    { 序号: 3, 单词: 'ABILITY', 释义: '本领', 词频: 9 },
     { 序号: 4, 单词: '', 释义: '无效' }
   ];
   const catalog = normalizeCatalog(rows);
   assert.deepEqual(catalog.map(item => item.id), ['abandon', 'ability']);
   assert.equal(catalog[0].rank, 1);
-  assert.equal(catalog[1].meaning, '能力');
+  assert.equal(catalog[1].meaning, '能力；本领');
+  assert.equal(catalog[1].frequency, 19);
+  assert.equal(catalog[1].rank, 2);
+});
+
+test('missing rank stays null instead of using a magic sentinel', () => {
+  const catalog = normalizeCatalog([{ 单词: 'example', 释义: '例子' }]);
+  assert.equal(catalog[0].rank, null);
 });
 
 test('reads both normalized snapshots and upstream payloads', () => {
@@ -29,7 +36,7 @@ test('reads both normalized snapshots and upstream payloads', () => {
   assert.equal(upstream[0].id, 'abandon');
 });
 
-test('study layers use stable limits and preserve old seed words', () => {
+test('study layers use stable limits and full means the complete normalized catalog', () => {
   const catalog = Array.from({ length: 5600 }, (_, index) => ({
     id: `word-${index + 1}`,
     word: `word-${index + 1}`,
@@ -47,7 +54,7 @@ test('study layers use stable limits and preserve old seed words', () => {
 
   assert.equal(core.length, ENGLISH_LAYERS.core.limit + 1);
   assert.equal(high.length, ENGLISH_LAYERS.high.limit + 1);
-  assert.equal(full.length, ENGLISH_LAYERS.full.limit + 1);
+  assert.equal(full.length, catalog.length + 1);
   assert.equal(core.at(-1).id, 'legacy-seed');
 });
 

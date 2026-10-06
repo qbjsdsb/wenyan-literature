@@ -1,29 +1,41 @@
-import { activeEvents } from '../core.js';
+import { activeEvents, DAY } from '../core.js';
+import {
+  DEFAULT_ENGLISH_NEW_WORD_LIMIT,
+  ENGLISH_MAX_SESSION_WORDS,
+  ENGLISH_WRONG_LOOKBACK_DAYS
+} from './config.js';
+import { isEnglishAttemptEvent, isWrongEnglishAttempt } from './events.js';
+import { wordIdFromKey } from './keys.js';
 
-const DEFAULT_WRONG_LOOKBACK_DAYS = 14;
-
-export function recentWrongWordIds(events, eligibleIds, { now = Date.now(), lookbackDays = DEFAULT_WRONG_LOOKBACK_DAYS } = {}) {
+export function recentWrongWordIds(
+  events,
+  eligibleIds,
+  { now = Date.now(), lookbackDays = ENGLISH_WRONG_LOOKBACK_DAYS } = {}
+) {
   const eligible = eligibleIds instanceof Set ? eligibleIds : new Set(eligibleIds ?? []);
-  const cutoff = now - lookbackDays * 86400000;
   const latestAttempt = new Map();
 
   for (const event of activeEvents(events)) {
-    if (!event.key?.startsWith('word:')) continue;
-    const id = event.key.slice(5);
-    if (!eligible.has(id) || !['review', 'typing'].includes(event.kind)) continue;
-    let wrong = false;
-    if (event.kind === 'typing') wrong = event.value.correct === false;
-    if (event.kind === 'review') wrong = event.value.rating === 1 || event.value.firstCorrect === false || event.value.hinted === true;
-    latestAttempt.set(id, { at: event.at, wrong });
+    if (!isEnglishAttemptEvent(event)) continue;
+    const id = wordIdFromKey(event.key);
+    if (!eligible.has(id)) continue;
+    latestAttempt.set(id, { event, wrong: isWrongEnglishAttempt(event) });
   }
 
+  const cutoff = now - lookbackDays * DAY;
   return [...latestAttempt.entries()]
-    .filter(([, value]) => value.wrong && value.at >= cutoff)
-    .sort((a, b) => b[1].at - a[1].at || a[0].localeCompare(b[0]))
+    .filter(([, value]) => value.wrong && value.event.at >= cutoff)
+    .sort((a, b) => b[1].event.at - a[1].event.at || a[0].localeCompare(b[0]))
     .map(([id]) => id);
 }
 
-export function buildEnglishQueue({ dueIds = [], wrongIds = [], newIds = [], newLimit = 12, maxTotal = 24 } = {}) {
+export function buildEnglishQueue({
+  dueIds = [],
+  wrongIds = [],
+  newIds = [],
+  newLimit = DEFAULT_ENGLISH_NEW_WORD_LIMIT,
+  maxTotal = ENGLISH_MAX_SESSION_WORDS
+} = {}) {
   const queue = [];
   const seen = new Set();
   const add = id => {

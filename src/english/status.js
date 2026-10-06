@@ -1,23 +1,16 @@
 import { activeEvents, latest, reviewCard } from '../core.js';
-
-const DAY = 86400000;
+import { isEnglishAttemptEvent, isRecentWrongEnglishAttempt } from './events.js';
+import { wordKey } from './keys.js';
 
 export function wordLearningState(events, id, now = Date.now()) {
-  const key = `word:${id}`;
+  const key = wordKey(id);
   const active = activeEvents(events);
   const mastered = Boolean(latest(events, 'mastered', key)?.on);
   const favorite = Boolean(latest(events, 'favorite', key)?.on);
   const reviews = active.filter(event => event.kind === 'review' && event.key === key);
-  const attempts = active.filter(event => ['review', 'typing'].includes(event.kind) && event.key === key);
+  const attempts = active.filter(event => isEnglishAttemptEvent(event) && event.key === key);
   const lastAttempt = attempts.at(-1) ?? null;
-
-  let recentWrong = false;
-  if (lastAttempt && lastAttempt.at >= now - 14 * DAY) {
-    if (lastAttempt.kind === 'typing') recentWrong = lastAttempt.value.correct === false;
-    if (lastAttempt.kind === 'review') {
-      recentWrong = lastAttempt.value.rating === 1 || lastAttempt.value.firstCorrect === false || lastAttempt.value.hinted === true;
-    }
-  }
+  const recentWrong = Boolean(lastAttempt && isRecentWrongEnglishAttempt(lastAttempt, { now }));
 
   if (mastered) {
     return { state: 'mastered', label: '已掌握', favorite, mastered, recentWrong, reviewCount: reviews.length, due: null };

@@ -23,13 +23,4 @@ export const questions=[
  {id:'irony',article:'narrative',section:2,type:'简答',prompt:'分析反讽时，需要交代哪些联系？',points:['说明说话者与具体情境。','辨认字面意思与另一层意味。','解释两种意义之间的距离及其效果。']},
  {id:'essay',article:'narrative',section:3,type:'论述',prompt:'选择鲁迅的一篇小说，论述叙事方式与人物呈现的关系。',points:['明确论点：选定一个具体叙事特点。','提供例证：指出具体片段，不只列作品名。','展开论证：解释叙事特点怎样影响人物呈现。','回扣题意：保持论点、例证与结论之间的联系。']}
 ];
-const vocabulary=[
- ['abandon','əˈbændən','放弃；抛弃'],['ability','əˈbɪləti','能力'],['abstract','ˈæbstrækt','抽象的'],['academic','ˌækəˈdemɪk','学术的'],
- ['achieve','əˈtʃiːv','实现；达到'],['acquire','əˈkwaɪə','获得；习得'],['adapt','əˈdæpt','适应；改编'],['adequate','ˈædɪkwət','足够的'],
- ['admire','ədˈmaɪə','钦佩'],['advantage','ədˈvɑːntɪdʒ','优势'],['advocate','ˈædvəkeɪt','提倡；拥护'],['affect','əˈfekt','影响'],
- ['alternative','ɔːlˈtɜːnətɪv','可供选择的；替代方案'],['ambiguous','æmˈbɪɡjuəs','含糊的；有歧义的'],['analyze','ˈænəlaɪz','分析'],['apparent','əˈpærənt','明显的；表面的'],
- ['approach','əˈprəʊtʃ','接近；方法'],['appropriate','əˈprəʊpriət','合适的'],['argument','ˈɑːɡjumənt','论点；争论'],['assess','əˈses','评估'],
- ['assume','əˈsjuːm','假定；认为'],['attitude','ˈætɪtjuːd','态度'],['aware','əˈweə','意识到的'],['coherent','kəʊˈhɪərənt','连贯的']
-];
-export const words=vocabulary.map(([word,ipa,meaning])=>({id:word,word,ipa:`/${ipa}/`,meaning,source:`https://dictionary.cambridge.org/dictionary/english/${word}`}));
-export const modes={follow:'跟打',recall:'默写',listen:'听写'};
+export { fallbackWords as words } from './english/fallback.js';

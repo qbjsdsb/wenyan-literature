@@ -2,7 +2,11 @@ import {mergeEvents,validEvent,newId} from './core.js';
 const testScope=new URLSearchParams(location.search).get('test');
 export const prefix=['1','visual','baseline','baseline-restore'].includes(testScope)?testScope==='1'?'wenyan-test:':testScope==='visual'?'wenyan-visual:':'wenyan-'+testScope+':':'';
 let problem='';
-export const local={getItem:k=>{try{return localStorage.getItem(prefix+k);}catch{problem='浏览器无法读取记录，请导出备份。';return null;}},setItem:(k,v)=>localStorage.setItem(prefix+k,v)};
+export const local={
+ getItem:k=>{try{return localStorage.getItem(prefix+k);}catch{problem='浏览器无法读取记录，请导出备份。';return null;}},
+ setItem:(k,v)=>localStorage.setItem(prefix+k,v),
+ removeItem:k=>localStorage.removeItem(prefix+k)
+};
 const key='wenyan-events-v2';
 let stored=[],rawRecords='';
 try {rawRecords=local.getItem(key)||'';stored=rawRecords?JSON.parse(rawRecords):[];if(!Array.isArray(stored)||stored.some(e=>!validEvent(e)))throw Error('invalid');}
