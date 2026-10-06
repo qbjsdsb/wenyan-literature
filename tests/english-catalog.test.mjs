@@ -51,6 +51,19 @@ test('study layers use stable limits and preserve old seed words', () => {
   assert.equal(core.at(-1).id, 'legacy-seed');
 });
 
+test('pending session words survive switching back to a smaller layer', () => {
+  const catalog = Array.from({ length: 5600 }, (_, index) => ({
+    id: `word-${index + 1}`,
+    word: `word-${index + 1}`,
+    meaning: `meaning-${index + 1}`,
+    rank: index + 1,
+    frequency: 5600 - index
+  }));
+  const core = selectActiveCatalog(catalog, [], 'core', ['word-5000', 'word-1201']);
+  assert.equal(core.some(item => item.id === 'word-5000'), true);
+  assert.equal(core.some(item => item.id === 'word-1201'), true);
+});
+
 test('invalid layer falls back to core', () => {
   assert.equal(resolveEnglishLayer('unknown'), 'core');
 });
