@@ -7,7 +7,7 @@ on:
 jobs:
   browser-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -22,6 +22,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Build static output
         run: npm run build
+      - name: Reject mixed-version offline shell
+        run: node tests/offline-version-smoke.mjs
       - name: Serve built output at root and subpath
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 --directory dist > /tmp/wenyan-root.log 2>&1 &
@@ -51,3 +53,45 @@ jobs:
         env:
           WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
         run: node tests/browser-smoke.mjs
+
+      - name: Experience matrix at root
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4173/
+          WENYAN_DEPLOYMENT: root
+        run: node tests/experience-smoke.mjs
+      - name: Experience matrix at subpath
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
+          WENYAN_DEPLOYMENT: subpath
+        run: node tests/experience-smoke.mjs
+      - name: Offline reopen and storage failure at root
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4173/
+        run: node tests/offline-smoke.mjs
+      - name: Offline reopen and storage failure at subpath
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
+        run: node tests/offline-smoke.mjs
+      - name: Checkout current main for visual comparison
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: baseline-source
+      - name: Capture main dist at desktop sizes
+        run: |
+          git -C baseline-source rev-parse HEAD > browser-evidence/before-main-head.txt
+          npm ci --prefix baseline-source
+          npm run build --prefix baseline-source
+          python3 -m http.server 4175 --bind 127.0.0.1 --directory baseline-source/dist > /tmp/wenyan-before.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4175/ >/dev/null; then break; fi
+            sleep 1
+          done
+          WENYAN_BASE_URL=http://127.0.0.1:4175/ WENYAN_DEPLOYMENT=main node tests/experience-smoke.mjs --before
+      - name: Retain screenshots and verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: english-experience-dist
+          path: browser-evidence/
+          if-no-files-found: warn

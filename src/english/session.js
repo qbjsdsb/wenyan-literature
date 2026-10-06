@@ -1,3 +1,17 @@
+import { ENGLISH_MAX_SESSION_WORDS } from './config.js';
+
+export function validSmartPlan(session) {
+  if (session.smart == null) return true;
+  if (session.smart !== 1 || session.mode !== 'recall' || typeof session.steps !== 'string' || session.steps.length !== session.queue.length || /[^erx]/.test(session.steps)) return false;
+  const counts = new Map();
+  for (let i = 0; i < session.queue.length; i++) {
+    const id = session.queue[i], kind = session.steps[i], seen = counts.get(id) || '';
+    if (seen.includes(kind) || (kind === 'x' && !seen.includes('r')) || (kind === 'e' && seen.length)) return false;
+    counts.set(id, seen + kind);
+  }
+  return counts.size <= ENGLISH_MAX_SESSION_WORDS && [...counts.values()].every(seen => seen.includes('r'));
+}
+
 export function hasUnfinishedEnglishSession(session) {
   return Boolean(
     session &&
@@ -36,3 +50,4 @@ export function recordEnglishFirstAttempt(session, correct, hinted = false) {
     }
   };
 }
+

@@ -18,3 +18,4 @@ test('错误备份整份拒绝，不改变现有学习记录',()=>{
  for(const bad of [{schema:1,events:[]},{schema:2,events:{}},{schema:2,events:[{...current[0],value:{done:'yes'}}]},null])assert.throws(()=>importEvents(bad,current));
  assert.equal(current.length,1);assert.equal(current[0].value.done,true);
 });
+test('backup rejects inconsistent same-ID copies and malformed observed flags',()=>{const ev=e('backup-review-example','review','word:ability',{rating:3,hinted:false});assert.throws(()=>importEvents({schema:3,events:[ev,{...ev,value:{rating:1}}]},[]),/ID_CONTENT_CONFLICT/);assert.throws(()=>importEvents({schema:3,events:[{...ev,value:{rating:3,hinted:'true'}}]},[]),/INVALID_BACKUP/);});

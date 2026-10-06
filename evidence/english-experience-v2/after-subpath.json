@@ -1,0 +1,47 @@
+[
+  {
+    "deployment": "subpath",
+    "viewport": {
+      "width": 1366,
+      "height": 768
+    },
+    "newExposureReviewCount": 0,
+    "delayedRecall": true,
+    "correctionRefresh": true,
+    "ratingRefresh": true,
+    "backupResume": true,
+    "boundedRetry": true,
+    "dueReviewCount": 2,
+    "applicationErrors": []
+  },
+  {
+    "deployment": "subpath",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "newExposureReviewCount": 0,
+    "delayedRecall": true,
+    "correctionRefresh": true,
+    "ratingRefresh": true,
+    "backupResume": true,
+    "boundedRetry": true,
+    "dueReviewCount": 2,
+    "applicationErrors": []
+  },
+  {
+    "deployment": "subpath",
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "newExposureReviewCount": 0,
+    "delayedRecall": true,
+    "correctionRefresh": true,
+    "ratingRefresh": true,
+    "backupResume": true,
+    "boundedRetry": true,
+    "dueReviewCount": 2,
+    "applicationErrors": []
+  }
+]

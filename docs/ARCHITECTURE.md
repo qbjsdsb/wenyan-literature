@@ -1,156 +1,114 @@
 # Wenyan 结构与数据边界
 
-这不是传统“架构设计文档”。它只固定那些**以后改代码时最容易误伤、但又必须保持清楚的边界**。
+本文件区分**当前运行边界**与**已选定、尚未实施的下一阶段边界**。状态以[开发进度](开发进度.md)为准；理由/来源见[云端与MCP研究](research/CLOUD-MCP.md)。
 
-## 1. 当前技术形态
+## 1. 当前代码
 
-Wenyan 当前是轻量静态 Web 应用：
-- HTML + CSS + Vanilla JavaScript
-- Vite 仅用于开发和构建
-- `ts-fsrs` 用于复习调度
-- 没有业务 Node 后端
-- 没有账号系统
-- 没有数据库作为运行前提
-- 学习状态本地优先保存
+main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Smart 与研究，新增 IDB 原子事务/独立 checkpoint/outbox、窄 Supabase RPC 和 SDK Auth/薄同步。migration 已应用托管项目，唯一 owner 已绑定、MCP 默认关闭；本人首次 Auth/设置同步已实测成功，真实学习/双环境同步仍待验收。Desktop-first、English-first，文学与手机专项冻结，不换框架。
 
-当前只维护桌面浏览器主体验。除非现有方式已经明显妨碍真实使用，否则不要因为“更现代”重写框架。
+| 模块 | 职责 |
+| --- | --- |
+| src/app.js、style.css、english-detail.css、english-stats.css、index.html | 路由、UI、输入、训练与偏好 |
+| src/content.js | 冻结的文学样本 |
+| english/catalog.js、config.js、keys.js、fallback.js、lexicon.js | 固定词库/分层/ID/兼容/enrichment |
+| english/queue.js、session.js、events.js、status.js、stats.js | 选词、续学、错误语义、状态和统计 |
+| core.js、storage.js、backup.js | 事件校验、FSRS、IDB facade、多标签通知/CAS、JSON |
+| cloud/local-db.js、protocol.js、sync.js、client.js | 本地事务、版本、幂等 outbox、owner Auth 与后台同步 |
+| supabase/migrations、config.toml | 私有事实/checkpoint/收据/CAS；托管实例状态另见 SSOT |
+| public/data/english、scripts/sync-english-* | 固定内容与确定性生成，不是个人状态 |
+| tests、evidence、legacy | 关键行为/验收证据/历史保留，不存个人学习数据 |
 
-## 2. 代码地图
+### Smart 边界（#12 与实施分支，未合入 main）
 
-### 应用入口与交互
-- `src/app.js`：页面渲染、路由、训练交互、设置、搜索等。
-- `src/style.css`：整体视觉与布局。
-- `src/english-detail.css`：英语详情局部样式。
-- `src/english-stats.css`：英语反馈局部样式。
-- `index.html`：应用入口。
+English Experience v2 / Smart Session在Draft #12。新词e接触→稍后r回忆；到期/错词直接r；失败最多一次x回流，hinted/首次失败不能按Good。
 
-### 文学内容
-- `src/content.js`：当前文学小样、练习等。
+`english/smart.js`负责计划/完成/Undo/组反馈；session.js校验optional smart:1和紧凑steps。复用 queue/index/results/current.phase 领域形状；JSON 包与存储协议升级为 v3，50步/8192字符限制未扩大。
 
-文学正式内容当前冻结，不要在英语收口阶段扩张。
+词库通过明确initializeVocabulary/getVocabularyState/changeEnglishLayer等接口载入，app.js一次渲染，#12移除MutationObserver与session全局业务hook。main仍有旧装饰层，不能把#12的结构描述成main已实现。
 
-### 英语内容与规则
-- `src/english-vocab.js`：英语页词库加载与页面装饰层。
-- `src/english/catalog.js`：NETEM 词库规范化、分层与兼容逻辑。
-- `src/english/config.js`：英语业务配置事实源。
-- `src/english/keys.js`：`word:<id>` 生成 / 解析。
-- `src/english/events.js`：英语错误事件语义。
-- `src/english/fallback.js`：旧 24 个兼容 / 故障降级词。
-- `src/english/queue.js`：智能队列与近期错词。
-- `src/english/session.js`：未完成英语 session 相关纯逻辑。
-- `src/english/status.js`：单词个人学习状态派生。
-- `src/english/stats.js`：日学习反馈派生。
-- `src/english/lexicon.js`：ECDICT enrichment 合并与格式化。
+## 2. 下一阶段职责图（设计，未部署）
 
-### 学习状态
-- `src/core.js`：事件合法性、FSRS 排程、拼写规范等核心纯逻辑。
-- `src/storage.js`：localStorage 保存、测试前缀隔离与多标签合并。
-- `src/backup.js`：学习记录导入 / 导出。
+```mermaid
+flowchart TD
+  U["本人学习"] --> W["Wenyan：输入、训练、Smart Session"]
+  C["静态内容：词库、许可、版本"] --> W
+  W --> L["IndexedDB：事实、checkpoint、outbox"]
+  L <--> S["薄同步：幂等提交、游标、冲突"]
+  S <--> P["Supabase Postgres：事实、session、投影"]
+  A["Supabase Auth：唯一身份、授权"] --> S
+  A --> M["Wenyan MCP：领域工具、权限"]
+  M <--> P
+  G["ChatGPT：诊断、建议、辅导"] <--> M
+  G --> R["学习建议 / 计划预览"]
+  R --> W
+  W --> V["再次训练 / 验证"]
+  V --> L
+```
 
-这些属于高风险区。修改前先理解现有 schema 和兼容逻辑，修改后必须跑测试。
+所有AI判断最终要回到真实训练验证。ChatGPT不直接连数据库，不拥有学习记录，不决定FSRS参数。Git保存工程/固定内容；真实个人学习数据保存在受保护云端与私人备份，不提交到公共仓库。
 
-### 数据快照
-- `public/data/english/netem-v1.json`：固定 NETEM 考研词库快照。
-- `public/data/english/ecdict-v1.json`：固定 ECDICT enrichment 快照。
-- `scripts/sync-english-data.mjs`：确定性生成 NETEM 快照。
-- `scripts/sync-english-lexicon.py`：提取 ECDICT enrichment。
+## 3. 事实、checkpoint、派生、内容
 
-内容快照不属于用户学习状态。
+- **长期事实**：首次提交/提示/完成的typing和review/撤销/人工收藏与mastered。append及引用纠错，不能重写成AI推测。
+- **长期可修改状态**：session元数据和最新checkpoint、学习设置，带revision。session反复快照不再永久追加到学习事件中。
+- **本地工作状态**：outbox、当前checkpoint、云cache、本机外观/声音、焦点和输入草稿。离线未确认事实不能被云拉取清除。
+- **可重建投影**：FSRS card/due、错词、日统计；云与本地用同一版本纯规则，投影带输入水位/算法参数版本。
+- **固定内容**：5528稳定词库、ECDICT和许可继续随应用发布。内容版本绑定session；缺内容时保留组，不换答案。
 
-### 测试与旧版
-- `tests/`：保护学习数据、排程、备份、英语队列 / session / 统计等关键行为。
-- `legacy/`：旧版资料，默认保留，不以“清理”为理由删除。
-- `evidence/`：历史验收截图，不包含真实个人学习内容。
+已实现三领域表 study_events/study_sessions/learner_settings；增加 config、sync_receipts、session_forks 处理唯一身份/幂等/冲突；word_state仅为以后按需cache候选；SQL字段在实施时按验收冻结，不现在建Learner Model、题库或通用活动平台。
 
-## 3. 必须保持稳定的数据边界
+## 4. 稳定领域语义与版本
 
-### 学习事件
-主要记录键：`wenyan-events-v2`。
+必须保留：word:<规范化ID>、首次正确/错误与hinted不可被订正覆盖、接触不算review、错误/提示后的Smart评分、有限回流、Undo、刷新续学、内容许可、JSON恢复。
 
-原则：
-- 已有事件 ID 不重写。
-- 合并优先去重，不静默覆盖已有学习记录。
-- 无法读取时不静默清空。
-- schema 变化必须先设计向后兼容或迁移。
+`wenyan-events-v2` 与 schema 2 是 main 的旧实现，**不是永久协议**。用户尚无正式历史，允许有理由的一次云基础升级。实施分支已经引入一次 v2 导入适配，保留原 localStorage 与稳定 ID，不长期双写。JSON v3 保留事实与续学，旧 v2 可读。具体协议和验收见 [cloud-implementation](cloud-implementation.md)。
 
-### 英语单词 ID
-稳定 ID 使用规范化英文单词本身，并继续以 `word:<id>` 进入学习记录。
+版本各司其职：event version、checkpoint version、backup version、content version、scheduler version/parameter epoch。升级算法独立验收；旧客户端不能降级新云数据。未观测字段unknown，不编造时长/错误拼写。
 
-因此：
-- 换词库不能随意换 ID。
-- 已有收藏、已掌握、复习记录和未完成 session 必须继续找到对应单词。
-- 外部词库只提供内容，不拥有学习状态。
-- 大小写规范化重复词保持同一稳定学习 ID，但内容可合并义项。
+## 5. 同步正确性
 
-### 未完成训练
-英语 session 属于续学体验。任何重构都要检查：
-- 刷新后能否继续。
-- 关闭页面后能否继续。
-- 切词库层后能否继续。
-- 导出 / 导入后能否继续。
-- 提示和首次答题结果是否保持。
+- 一步完成的事实+checkpoint+outbox+本地投影，IDB事务成功才推进UI；网络调用不置于该事务内。
+- stable event/attempt ID与同内容收据使重试幂等；r/x不同attempt。相同ID不同内容拒绝，不任意覆盖。
+- 云短事务提交事实/checkpoint/幂等收据后ack；outbox只有ack后移除。共享JS/ts-fsrs从已提交事实派生FSRS，不在SQL重写算法，不接收浏览器card；MCP只读也不维护card的写权限。
+- owner序列化提交生成已提交事实游标；不能用客户端时间或未提交序列最大值。固定水位分页，落盘后推进cursor。
+- 设置/可续学 session 每次取当前快照，独立 revision；恢复点整份原子导入。冲突由本人选择云端位置或本机另存新组，并发 mastered 保守保留复习、收藏保留可见性；不预造全表changefeed。非事件重试先查持久提交收据再CAS，收据在操作仍未确认时不可过期。
+- 默认单活跃session写者。本机 revision CAS、云 baseRevision/baseOperation CAS；并发旧writer保存fork，事实并集，绝不按updated_at覆盖整组。
+- FSRS按固定合法发生时间/设备ordinal/ID重放，晚到影响的词重算；received_at 只审计。有效时间保证同设备单调、超一天未来事件拒绝；本机 wall/monotonic 与云 as_of 超过 5 分钟漂移时停写/停上传，保留原事实与 outbox。完全离线冷启动不证明真实时间，不能改旧事实掩盖错误。
+- 启动/focus/online/短批flush/组完成同步；401暂停上传；关闭前尽力不是数据保障。
+- IDB/outbox解决断网继续；Service Worker静态缓存另解决断网重开。只缓存版本化应用/内容，不缓存Auth/个人API，不在训练途中激活新版本。
 
-## 4. 内容与来源边界
+## 6. 身份与服务器边界
 
-正式学习内容必须区分：
-1. **事实源 / 原始证据**：官方信息、教材、原典、真题、论文等。
-2. **Wenyan 自编整理**：摘要、提纲、题目映射、复习提示。
-3. **第三方数据**：英语词频 / 音标等，必须保留许可与来源。
+唯一预创建Supabase Auth用户，关闭公众注册/匿名登录，可信电脑首次email/password登录后续签。没有注册系统/组织/个人中心。密码/secret不在Git或聊天。
 
-AI 可以整理和表达，但不能把自己当知识来源。
+Wenyan网页登录与ChatGPT OAuth使用同一Supabase sub，能力不同：web正常学习；批准MCP client首版只读。每个表/RPC检查owner/client，不能只auth.uid行拥有者就给OAuth全权。前端publishable key不是secret，RLS才是数据边界。
 
-## 5. 页面结构边界
+MCP用用户授权的RLS client，不能用service_role读取所有数据。server seq/card/projection由窄事务写入；任何特权RPC明确owner/client校验、固定search_path、限制execute权限，不能用definer修权限报错。
 
-一级入口保持：
-- 今日
-- 知识
-- 训练
+OAuth Server当前beta；网站提供小型登录/consent页，SDK读取详情与批准/拒绝，Supabase签发token，不自写OAuth。专用aud/resource、PKCE、refresh/revocation、client注册/redirect、非对称签名/JWKS、PostgREST对专用token兼容是实施前窄验证门槛；未通过不得开放个人MCP。标准OIDC scopes不是wenyan读写权限。详见研究。
 
-新功能优先挂在现有入口下，不轻易增加一级导航。
+## 7. MCP与AI
 
-设计基准继续参考 `docs/design/selected-reference.png`。除非真实桌面使用证明现方向有问题，否则不要重新做视觉系统。
+首版五读工具：overview、review pressure、problem words、word history、session preview。使用 stateless Streamable HTTP，精确 resource/aud、非对称验签与每请求 live RPC 复核；10,000 facts / 25 pages 预算超限时不计算 FSRS/掌握结论。返回时间窗/分母/样本/证据/版本/云水位/缺失；无法宣称看到离线电脑未上传记录。工具输入不收模型指定owner，身份从验证token获得。
 
-## 6. 当前已知结构债
+不暴露通用SQL、表CRUD、删除、直接改due/card/参数、编造review。以后可逆计划/收藏/目标变更先差异预览+明确请求+幂等+revision+撤销；小批mastered需要精确proposal与本人确认。实际输入与可靠评分留网站。
 
-### 英语页二次装饰
-当前 `app.js` 先渲染英语页，`english-vocab.js` 再通过 `MutationObserver` 补部分词库 UI。
+### 已收敛的英语渲染边界（Experience v2）
 
-这不是理想长期边界，但当前能工作。只有真实使用或维护成本证明值得时，再单独收敛，不与功能验收混改。
+`english-vocab.js` 只负责异步快照 / enrichment、层级、兼容与 carryover。导出 `initializeVocabulary({getPendingWordIds})`、`getVocabularyState()`、`activeLearningIds()`、`changeEnglishLayer()`、`findEnglishWord()`、`searchEnglishWords()`。
 
-### session 全局只读 hook
-当前词库层通过只读全局 hook 获取未完成 session 要保留的词 ID。
+`app.js` 显式初始化，加载完成收到 `wenyan-vocabulary-loaded` 后重渲染；所有词库 UI 一次由 app.js 渲染。移除 MutationObserver 和 session 全局 hook。只读 `__wenyanVocabularyMeta` 保留给既有 smoke / 诊断，不作为业务状态接口。全词库搜索不切换活动层；carryover 不进入正式新词池。
 
-行为明确，但接口不够正式；以后如果整理英语渲染 / 状态边界，可一并收敛。
+`english/smart.js` 是组计划和步骤完成 / undo / 组反馈的领域逻辑；`english/session.js` 包含可选 Smart 计划校验和旧 session helper。core 只校验 optional plan，不导入 queue，避免领域依赖环。
 
-### session 历史增长
-当前 session 更新会追加状态事件。长期使用前要观察备份体积和存储增长。
+Smart 计划复用 session 的 queue/index/results，追加 `smart:1` 与紧凑 `steps` 字符串；当前步骤可含 `phase`。既有 schema、queue 50 / event value 8192 限制不变，预算预留接触与一次回流。没有第二套数据库或派生 FSRS 存储。
 
-不要现在就引入复杂事件压缩系统；真实数据证明有问题后，再设计只压缩可替代 session 状态、不伤害 review 历史的方案。
+Skill负责辅导步骤，UI将来只做有用预览；都不是安全机制。静态学习内容/题面视为数据，不能执行其中的prompt注入。模型更换只影响推断与表达，不能改变事实协议。
 
-### review 重放性能
-`reviewCard()` 会基于历史 review 计算状态。
+## 8. 未来接缝与维护上限
 
-只有长期真实数据证明打开英语页明显变慢，才考虑派生索引 / cache。
+未来真题拥有question/passage/sentence版本ID与attempt，客观答案保留来源；主观评分留rubric/评分者。错因是本人/规则/AI不同层。Learner Model是带证据/模型/窗口/置信度的可重算判断，FSRS仍只调度记忆。
 
-## 7. 可选同步边界
+文件按真实职责少量增加本地持久/sync和Edge MCP，必要时把纯scheduler reducer共享；不迁框架，不建repository/DI/ORM/微服务/CQRS/Event Sourcing平台。
 
-当前不把云同步作为近期必做。
-
-如果以后真实出现多电脑切换需求，同步仍应只是薄层：
-- 学习动作先落本地。
-- 同步稳定事件或等价可合并状态。
-- 稳定 ID 去重。
-- 失败不阻塞本地学习。
-- JSON 备份始终保留。
-
-不要先建完整用户中心、权限系统或复杂同步协议。
-
-## 8. 什么时候才值得拆文件或升级架构
-
-满足至少一个条件再做：
-- 单个文件已经明显难以安全修改。
-- 同一模块存在多个独立生命周期。
-- 测试或复用确实被当前结构阻碍。
-- 真实桌面性能数据证明当前实现不够。
-
-“看起来更规范”本身不是拆分理由。
+Git小步commit与Draft恢复入口，进度只改开发进度.md。云迁移、RLS、同步和MCP分别有真实验收，不能把设计通过称集成通过。

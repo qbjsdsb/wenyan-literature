@@ -1,19 +1,23 @@
 import { createEmptyCard, fsrs, Rating } from 'ts-fsrs';
 import { ENGLISH_MODES } from './english/config.js';
+import { validSmartPlan } from './english/session.js';
 
 export const scheduler = fsrs({enable_fuzz:false});
 export const DAY = 86400000;
-export const kinds = new Set(['review','typing','reading','task','favorite','mastered','undo','session']);
+export const kinds = new Set(['review','typing','reading','task','favorite','mastered','undo','session','attempt']);
 export function validEvent(e) {
-  if(!(e && /^[a-zA-Z0-9-]{8,80}$/.test(e.id) && typeof e.device==='string' && e.device.length<=80 && kinds.has(e.kind) && typeof e.key==='string' && e.key.length<=100 && Number.isFinite(e.at) && e.at>0 && e.at<=Date.now()+DAY && e.value && typeof e.value==='object' && !Array.isArray(e.value) && JSON.stringify(e.value).length<=8192))return false;
+  if(!(e && typeof e.id==='string' && /^[a-zA-Z0-9-]{8,80}$/.test(e.id) && typeof e.device==='string' && e.device.length<=80 && kinds.has(e.kind) && typeof e.key==='string' && e.key.length<=100 && Number.isFinite(e.at) && e.at>0 && e.at<=Date.now()+DAY && e.value && typeof e.value==='object' && !Array.isArray(e.value) && JSON.stringify(e.value).length<=8192))return false;
   const v=e.value;
+  if(['review','typing','session'].includes(e.kind)&&['firstCorrect','hinted'].some(k=>Object.hasOwn(v,k)&&typeof v[k]!=='boolean'))return false;
+  if(['favorite','mastered'].includes(e.kind)&&e.previous!=null&&(!Array.isArray(e.previous)||e.previous.length>1000||e.previous.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(id))))return false;
+  if(e.kind==='attempt')return ['firstCorrect','hinted'].includes(v.field)&&typeof v.value==='boolean'&&typeof v.sessionId==='string'&&Number.isSafeInteger(v.index)&&v.index>=0;
   if(e.kind==='review')return [1,3].includes(v.rating);
   if(e.kind==='typing')return typeof v.correct==='boolean';
   if(e.kind==='reading')return typeof v.article==='string' && Number.isSafeInteger(v.section) && v.section>=0 && v.section<1000 && Number.isSafeInteger(v.paragraph) && v.paragraph>=0 && v.paragraph<1000;
   if(e.kind==='task')return typeof v.done==='boolean';
   if(e.kind==='favorite'||e.kind==='mastered')return typeof v.on==='boolean';
   if(e.kind==='undo')return typeof v.id==='string' && /^[a-zA-Z0-9-]{8,80}$/.test(v.id);
-  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode):typeof v.article==='string');
+  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)&&['firstCorrect','hinted'].every(k=>!Object.hasOwn(r,k)||typeof r[k]==='boolean')) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode)&&validSmartPlan(v):typeof v.article==='string');
   return false;
 }
 export function mergeEvents(...lists) {
@@ -26,7 +30,19 @@ export function activeEvents(events) {
   return events.filter(e=>e.kind!=='undo'&&!undone.has(e.id));
 }
 export function latest(events,kind,key) {
+  if(kind==='favorite'||kind==='mastered'){
+    const heads=flagHeads(events,kind,key);if(!heads.length)return undefined;
+    return {on:kind==='mastered'?heads.every(e=>e.value.on):heads.some(e=>e.value.on),conflict:new Set(heads.map(e=>e.value.on)).size>1};
+  }
   return activeEvents(events).filter(e=>e.kind===kind && e.key===key).at(-1)?.value;
+}
+// Only boolean learning flags carry observed predecessors. Concurrent mastery
+// keeps the word in review; concurrent bookmarks keep it visible. A later
+// explicit toggle observes both branches and resolves the choice.
+export function flagHeads(events,kind,key){
+  const list=activeEvents(events).filter(e=>e.kind===kind&&e.key===key).sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)),superseded=new Set();
+  let legacy;for(const e of list){if(Array.isArray(e.previous))for(const id of e.previous)superseded.add(id);else{if(legacy)superseded.add(legacy.id);legacy=e;}}
+  return list.filter(e=>!superseded.has(e.id));
 }
 export function reviewCard(events,key) {
   let card=createEmptyCard(new Date(0));

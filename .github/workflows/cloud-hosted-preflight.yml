@@ -1,0 +1,27 @@
+name: cloud-hosted-denial-preflight
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'tests/cloud-hosted-denial.mjs'
+      - '.github/workflows/cloud-hosted-preflight.yml'
+      - '.env.example'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hosted-denial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Real hosted denial checks using public key only
+        run: node tests/cloud-hosted-denial.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hosted-denial-preflight
+          path: browser-evidence/hosted-denial.json

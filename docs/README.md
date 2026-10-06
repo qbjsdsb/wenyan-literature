@@ -13,22 +13,18 @@
 
 当前真实验收清单：[`english/VALIDATION.md`](english/VALIDATION.md)。
 
-## 当前基线
+## 当前基线与研究入口
 
-旧 PR #2—#10 是历史 stacked PR，保留追溯价值，但不再继续向上叠开发。
+main为桌面英语v1；#12是未合并的Smart Session/Experience v2；#13是独立云端与MCP研究 Draft，#14 是整合 Smart/研究的云基础实施。旧#2—#10不续接，#1文学审计冻结。接手读取实时main/PR/CI，不把文档SHA当永久head。
 
-当前 main 候选：
+新增研究入口：[research/CLOUD-MCP.md](research/CLOUD-MCP.md)。保存方案比较、官方依据、同步/身份/MCP未知门槛与风险；不是第二份进度表。架构图在ARCHITECTURE，路线/验收在ROADMAP。
 
-`integration/desktop-english-baseline-v1`
-
-当前规则：
-- Desktop-first。
-- English-first。
-- 文学冻结。
-- 手机端专项冻结。
-- 先桌面验收，再收拢 main。
+当前方向：Desktop-first、English-first；云长期事实与本地即时响应；ChatGPT可更换推理层。IDB/RPC/Auth UI/薄同步代码在 #14，托管 Auth/云同步尚未实测；MCP 尚未开放，文学/手机专项冻结。
 
 ## 文档分类
+
+### 云基础实施
+- [cloud-implementation.md](cloud-implementation.md)：IDB/RPC/同步协议、配置与可复现验收；当前状态仍只看开发进度。
 
 ### 状态与验收
 - [`开发进度.md`](开发进度.md)：当前分支、已完成、未验证、下一动作。
@@ -37,6 +33,8 @@
 - [`../evidence/`](../evidence/)：与历史验收对应的截图。
 
 ### 当前专项：英语
+- [`english/EXPERIENCE-AUDIT.md`](english/EXPERIENCE-AUDIT.md)：本轮实施前真实 UX 审计。
+- [`english/EXPERIENCE-VALIDATION.md`](english/EXPERIENCE-VALIDATION.md)：本轮生产构建验证与视觉对比。
 - [`english/PLAN.md`](english/PLAN.md)：英语产品原则、已完成能力和后续阶段。
 - [`english/MAINTAINABILITY-AUDIT.md`](english/MAINTAINABILITY-AUDIT.md)：已处理与刻意后置的英语维护问题。
 
@@ -70,7 +68,11 @@ README
 → ROADMAP
 → english/PLAN
 → english/VALIDATION
-→ 实际整合分支代码
+→ research/CLOUD-MCP（本任务）
+→ 实际main与进行中PR代码
 ```
 
 如果文档与远端实际状态冲突，**以实际远端为准，并立即修正 `docs/开发进度.md`**。
+
+
+云专项：[同步实施](cloud-implementation.md)、[私密备份](cloud-backup.md)、[MCP 授权与只读边界](mcp-implementation.md)。

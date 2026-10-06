@@ -1,0 +1,22 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {PGlite} from '@electric-sql/pglite';
+import {canApprove,safeConsentRedirect} from '../src/mcp/consent-policy.js';
+test('consent requires exact enabled client, narrow scope and registered callback; never follows arbitrary redirects',()=>{
+ const policy={enabled:true,allowed:true,clientId:'approved',redirectUri:'https://chatgpt.com/callback'},details={client:{id:'approved'},scope:'openid',redirect_uri:policy.redirectUri};assert(canApprove(details,policy));
+ for(const detail of [{...details,scope:'openid email'},{...details,client:{id:'unknown'}},{...details,redirect_uri:'https://evil.example'}])assert.equal(canApprove(detail,policy),false);assert.equal(canApprove(details,{...policy,enabled:false}),false);
+ assert.equal(safeConsentRedirect(policy.redirectUri+'?code=fixture&state=fixture',policy.redirectUri),policy.redirectUri+'?code=fixture&state=fixture');
+ for(const url of ['https://evil.example/callback?code=fixture','http://chatgpt.com/callback','https://chatgpt.com/callback#leak','https://user@chatgpt.com/callback'])assert.throws(()=>safeConsentRedirect(url,policy.redirectUri));
+});
+test('official-hook preparation leaves first-party claims intact, restricts calls, rejects other users/clients and only customizes approved aud',async()=>{
+ const db=new PGlite(),owner='10000000-0000-4000-8000-000000000001',session='10000000-0000-4000-8000-000000000002';
+ try{await db.exec(`create role anon;create role authenticated;create role supabase_auth_admin;create schema auth;create table auth.users(id uuid primary key);create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz);create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;insert into auth.users values('${owner}');insert into auth.sessions values('${session}','${owner}',null);grant usage on schema auth to anon,authenticated;grant execute on all functions in schema auth to anon,authenticated;`);
+ await db.exec(await readFile('supabase/migrations/20261006184525_wenyan_cloud_foundation.sql','utf8'));await db.exec(await readFile('supabase/migrations/20261006203051_wenyan_oauth_preparation.sql','utf8'));
+ await db.exec(`update wenyan_private.config set owner_id='${owner}',mcp_client_id='approved',mcp_resource='https://mcp.example',mcp_redirect_uri='https://chatgpt.com/callback';`);
+ const invoke=async event=>(await db.query('select public.wenyan_access_token_hook($1::jsonb) r',[JSON.stringify(event)])).rows[0].r;
+ const claims={sub:owner,session_id:session,aud:'authenticated',role:'authenticated',user_metadata:{client_id:'approved'}};
+ await db.exec('set role authenticated');await assert.rejects(invoke({claims}),/permission denied/);await db.exec('reset role;set role supabase_auth_admin');assert.deepEqual((await invoke({claims})).claims,claims);await assert.rejects(invoke({claims:{...claims,client_id:'approved'}}),/OAUTH_NOT_APPROVED/);
+ await db.exec('reset role;update wenyan_private.config set mcp_enabled=true;set role supabase_auth_admin');const result=await invoke({claims:{...claims,client_id:'approved'},client_id:'approved'});assert.equal(result.claims.aud,'https://mcp.example');assert.equal(result.claims.sub,owner);
+ for(const event of [{claims:{...claims,client_id:'unknown'}},{claims:{...claims,client_id:'approved',sub:session}},{claims:{...claims,client_id:'approved',is_anonymous:true}},{claims:{...claims,client_id:'approved'},client_id:'unknown'},{claims,authentication_method:'oauth_provider/authorization_code'}])await assert.rejects(invoke(event));
+ await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(claims)]);await db.exec('set role authenticated');const policy=(await db.query("select public.wenyan_oauth_policy('approved') r")).rows[0].r;assert.equal(policy.allowed,true);
+ await db.exec('reset role');await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...claims,client_id:'approved',aud:'https://mcp.example'})]);await db.exec('set role authenticated');await assert.rejects(db.query("select public.wenyan_oauth_policy('approved')"),/FORBIDDEN/);
+ }finally{await db.close();}
+});

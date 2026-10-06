@@ -14,6 +14,8 @@
 
 此前 PR #2—#10 的有效英语成果已被 #11 收拢；旧 PR 仅保留历史追溯价值，不再作为开发父链。PR #1 是独立文学内容审计线，继续冻结。
 
+本分支的 English Experience v2 见 [Draft PR #12](https://github.com/qbjsdsb/wenyan-literature/pull/12)，尚未进入 main。以下能力包含本分支改进；正式上线状态以远端 main 和 `docs/开发进度.md` 为准。
+
 ## 英语当前能力
 
 ### 词库
@@ -24,7 +26,10 @@
 - 兼容词与未完成 session 的 carryover 不污染正式层级计数。
 
 ### 训练
-- 跟打 / 默写 / 听写。
+- 默认 Smart Session：开始今天学习；到期 / 错词直接主动回忆，新词先完整跟打，再在本组稍后回忆。
+- 跟打接触仅记录 typing；主动回忆才记录 review 并启动 / 更新 FSRS。
+- 失败先完整订正，再有界延后回流，不把提示或订正当独立答对。
+- 自由练习保留跟打 / 默写 / 听写；自由默写和听写的自评仍用于复习排程。
 - 首次拼错保留，必须完整订正。
 - `ts-fsrs` 负责主动回忆调度。
 - 智能队列：`到期 → 近期错词 → 新词`。
@@ -40,7 +45,7 @@
 - 当前学习状态、复习次数、下次复习。
 - 今日新学、主动复习、当前到期、首次正确率、拼写错误。
 
-统计直接从 `wenyan-events-v2` 派生，不维护第二套统计数据库。
+main 从 v2 本地事件派生统计；本实施分支从 IndexedDB 事实重建，仍没有第二套统计数据库。
 
 ### 备份
 - JSON 导出 / 导入。
@@ -66,22 +71,21 @@ PR #11 合并前已经通过：
 
 合并到 `main` 后，push CI 也再次成功。
 
-详细证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)。
+Baseline 历史证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)。本分支 56 项测试与两路径三尺寸 Smart dist 验收见 [`EXPERIENCE-VALIDATION.md`](docs/english/EXPERIENCE-VALIDATION.md)。
 
 ## 当前下一步
 
-现在不继续堆新训练模式。
+当前运行版仍是本地桌面英语v1。Smart Session / English Experience v2 在 [Draft PR #12](https://github.com/qbjsdsb/wenyan-literature/pull/12)，已通过其最新CI/浏览器矩阵，尚未合并。
 
-顺序固定为：
-1. **提供固定电脑端访问入口。**
-2. 开始连续真实使用，让学习记录在稳定 origin 下长期积累。
-3. 下一个优先功能：**快速筛词**，用真实个人判断淘汰已经掌握的基础词，而不是再写硬编码黑名单。
-4. 再根据真实数据决定：到期排序、session 日志压缩、长期性能优化。
-5. 只有出现真实多电脑需求时才做单人薄同步。
-6. 再做反复错词 / 高频难词语境强化。
-7. 最后恢复文学。
+[Draft PR #13](https://github.com/qbjsdsb/wenyan-literature/pull/13) 只研究下一阶段：**静态Wenyan + IndexedDB本地即时保存 + Supabase长期事实/Auth + 只读Wenyan MCP + ChatGPT推理**。没有实现云端、安装插件或发布。
 
-当前不维护 Android / iOS 专项体验。
+[Draft PR #14](https://github.com/qbjsdsb/wenyan-literature/pull/14) 整合 #12 的 Smart 代码与 #13 研究，已实现 IndexedDB 原子学习、outbox、JSON v3/恢复点、Supabase 私有 schema/RPC、Auth UI 与薄同步。main 保持不变。托管 schema/RLS/RPC 已应用，owner/Auth 与真实同步尚未验收；正式部署、MCP 与 Plugin 还未完成；快速筛词后置，不重写英语 UX。
+
+用户尚未开始正式使用，没有需要迁移的真实学习历史。schema 2不作为永久协议；云基础允许有理由的一次升级，保留Smart Session、FSRS、稳定word ID、首次结果与JSON备份。
+
+顺序：英语体验收口 → 云基础与学习状态 → 多电脑/离线/备份 → 固定正式入口 → 只读MCP/个人Plugin → 按需可逆写入 → 真题与有证据的Learner Model。文学与手机专项冻结。
+
+理由与来源见 [云端与MCP研究](docs/research/CLOUD-MCP.md)，完成标准见 [ROADMAP](docs/ROADMAP.md)。不新增网站AI聊天框，不自建OAuth，不让ChatGPT拥有学习事实。
 
 ## 接手顺序
 
@@ -93,11 +97,11 @@ PR #11 合并前已经通过：
 6. [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)
 7. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-从 `main` 开始新工作，不要再从 PR #2—#10 旧链续接。
+新工作先核对远端 `main` 与 #12 / #13 / #14；云实施继续 #14，共享文档按实际实现语义合并，不粗暴覆盖。不要从 PR #2—#10 旧链续接。
 
 ## 运行
 
-Node.js 24+ 只用于开发 / 构建；应用本身仍是 HTML + CSS + Vanilla JavaScript，没有 Node 业务后端或账号系统。
+Node.js 24+ 只用于开发 / 构建；应用本身仍是 HTML + CSS + Vanilla JavaScript，没有 Node 业务后端、公众注册或账号中心。
 
 ```bash
 npm ci
@@ -113,9 +117,9 @@ npm run build
 
 ## 数据保存
 
-个人学习状态当前保存在浏览器 localStorage，核心事件键为 `wenyan-events-v2`。
+main 仍使用 localStorage v2；本实施分支使用 IndexedDB v3，事实、checkpoint 与 outbox 同一事务保存。旧 `wenyan-events-v2` 与 v1 偏好 session 只作一次迁移源，原值保留。
 
-稳定边界：
+当前运行版保护的边界（下一阶段存储协议可按明确设计升级）：
 - 稳定事件 ID。
 - `word:<规范化英文单词>`。
 - 收藏 / 已掌握事件语义。
@@ -124,7 +128,7 @@ npm run build
 - JSON 备份兼容。
 - `ts-fsrs` 历史。
 
-每次学习动作先写本机。手动 JSON 导入 / 导出继续作为重要兜底。
+学习完成/Undo 事务成功后才推进；网络失败保留 outbox。JSON v3 整份原子导入、旧 v2 可读，五份本机恢复点可在设置里使用。版本化静态缓存支持断网重开。托管云同步仍等待 Supabase 登录与真实验收，不把“本机已存”称为“已同步”。真实学习数据与 secret 不进入公共 Git。协议与验收见 [cloud-implementation](docs/cloud-implementation.md)。
 
 ## 第三方数据
 
@@ -133,3 +137,4 @@ npm run build
 ECDICT 只用于结构化 enrichment（当前主要是音标和词形变化），不替换 NETEM 中文释义，也不批量导入例句正文。详见 `docs/third-party/`。
 
 英语交互参考 Qwerty Learner、TypeWords、Clozemaster 等成熟产品，但不直接混入会改变本仓库许可义务的 GPL 程序代码。
+
