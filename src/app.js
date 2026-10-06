@@ -4,12 +4,14 @@ import '@fontsource/noto-serif-sc/400.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@phosphor-icons/web/regular';
 import './style.css';
+import './english-detail.css';
 import {articles,authors,works,questions,words,modes} from './content.js';
 import {latest,activeEvents,reviewCard,nextReview,localDay,dueKeys,spellingMatches,intervalLabel,newId} from './core.js';
 import {store,record,save,local} from './storage.js';
 
 import {importEvents,exportState} from './backup.js';
 import {buildEnglishQueue,recentWrongWordIds} from './english/queue.js';
+import {displayVariants,wordLearningState} from './english/status.js';
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -151,7 +153,14 @@ function appearance(){openPanel(`<h2>阅读外观</h2><label>字号 <input id="f
 function toc(){const a=articles.find(a=>a.id===currentRead.article);openPanel(`<h2>章节目录</h2><div class="toc-list">${a.sections.map((s,i)=>link(`read/${a.id}/${i}`,`${String(i+1).padStart(2,'0')} ${esc(s.title)}`,i===currentRead.section?'active':'')).join('')}</div>`);}
 function search(){openPanel(`<h2>搜索</h2><label class="sr-only" for="search-input">搜索作家、作品、知识点或单词</label><input type="search" id="search-input" placeholder="作家、作品、知识点或单词"/><div id="search-results"></div><p class="source-note">检索本机已有学习内容。</p>`);$('#search-input').focus();$('#search-input').addEventListener('input',searchResults);searchResults();}
 function searchResults(){const text=$('#search-input').value.toLowerCase();const items=[...articles.map(a=>({title:a.title,type:a.period,path:'read/'+a.id+'/0'})),...authors.map(a=>({title:a.name,type:'作家',path:'author/'+a.id})),...works.map(w=>({title:w.title,type:'作品',path:'work/'+w.id})),...questions.map(q=>({title:q.prompt,type:q.type,path:'recall/'+q.article+'/'+q.id}))];const found=items.filter(i=>i.title.includes(text));$('#search-results').innerHTML=found.slice(0,10).map(i=>link(i.path,`<span>${esc(i.title)}</span><small>${i.type}</small>`,'search-result')).join('')+words.filter(w=>(w.word+w.meaning).includes(text)&&text).slice(0,5).map(w=>btn('word-detail',w.word+' · '+esc(w.meaning),'search-result',`data-word="${w.id}"`)).join('');if(!found.length&&!$('#search-results').innerHTML)$('#search-results').innerHTML='<p class="muted">没有匹配内容，试试其他关键词。</p>';}
-function wordDetail(id){const w=words.find(w=>w.id===id);if(!w)return;openPanel(`<h2 class="word-small detail-word">${w.word}</h2><p class="ipa">${esc(w.ipa)}</p><p>${esc(w.meaning)}</p><div class="panel-actions">${btn('favorite',icon('bookmark-simple')+(latest(store.events,'favorite','word:'+id)?.on?' 取消收藏':' 收藏'),'','data-word="'+id+'"')}${btn('mastered',latest(store.events,'mastered','word:'+id)?.on?'恢复复习':'标为已掌握','','data-word="'+id+'"')}${btn('speak',icon('speaker-high')+' 发音','','data-word="'+id+'"')}</div><p class="source-note">已掌握会移出默认复习队列，可随时恢复。</p><a class="text-link" href="${w.source}" target="_blank" rel="noopener">词典核对 ${icon('arrow-up-right')}</a>`);}
+function wordDetail(id){
+ const w=words.find(w=>w.id===id);if(!w)return;
+ const state=wordLearningState(store.events,id),variants=displayVariants(w.variants);
+ const rank=Number.isFinite(w.rank)&&w.rank<90000?String(w.rank):'',frequency=Number.isFinite(w.frequency)&&w.frequency>0?String(w.frequency):'';
+ const next=state.state==='mastered'?'已移出默认复习':state.state==='new'?'首次主动回忆后开始排程':state.state==='due'?'现在需要复习':state.due?intervalLabel(state.due):'';
+ const tags=[state.label,state.recentWrong?'近期错词':'',state.favorite?'已收藏':''].filter(Boolean);
+ openPanel(`<h2 class="word-small detail-word">${esc(w.word)}</h2><p class="ipa">${esc(w.ipa)}</p><p>${esc(w.meaning)}</p><div class="word-detail-meta">${tags.map(tag=>`<span class="${tag==='近期错词'?'is-wrong':''}">${esc(tag)}</span>`).join('')}</div><dl class="word-detail-grid"><dt>考研排名</dt><dd>${esc(rank?`#${rank}`:'')}</dd><dt>词频</dt><dd>${esc(frequency)}</dd><dt>分类</dt><dd>${esc(w.category||'')}</dd><dt>子分类</dt><dd>${esc(w.subcategory||'')}</dd><dt>其他拼写</dt><dd>${esc(variants)}</dd><dt>复习次数</dt><dd>${state.reviewCount?esc(String(state.reviewCount)):''}</dd></dl><p class="word-detail-next muted">${esc(next)}</p><div class="panel-actions">${btn('favorite',icon('bookmark-simple')+(state.favorite?' 取消收藏':' 收藏'),'','data-word="'+id+'"')}${btn('mastered',state.mastered?'恢复复习':'标为已掌握','','data-word="'+id+'"')}${btn('speak',icon('speaker-high')+' 发音','','data-word="'+id+'"')}</div><p class="source-note">排名、词频和分类来自固定考研词库快照；学习状态来自本机记录。已掌握会移出默认复习队列，可随时恢复。</p><a class="text-link" href="${w.source}" target="_blank" rel="noopener">词典核对 ${icon('arrow-up-right')}</a>`);
+}
 function exportRecords(){
  const text=JSON.stringify({...exportState(store.events),...(store.problem?{unreadableOriginal:store.rawRecords}:{})},null,2);
  openPanel(`<h2>导出备份</h2><a id="backup-download" class="button primary">下载备份文件</a><details><summary>下载不可用时，复制备份文字</summary><label for="backup-text">完整备份</label><textarea id="backup-text" readonly rows="8" style="width:100%">${esc(text)}</textarea></details><p class="source-note">包含已完成记录、复习安排和续学位置。请妥善保存。</p>`);
