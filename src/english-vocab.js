@@ -36,7 +36,7 @@ function normalizeRow(row) {
     variants: row['其他拼写'] ?? null,
     category: row['分类'] ?? null,
     subcategory: row['子分类'] ?? null,
-    source: DATASET_PAGE
+    source: `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(word.toLowerCase())}`
   };
 }
 
@@ -142,6 +142,10 @@ function decorateEnglishPage() {
     }
   }
 }
+
+const style = document.createElement('style');
+style.textContent = '.ipa:empty{display:none}';
+document.head.append(style);
 
 const app = document.getElementById('app');
 if (app) new MutationObserver(decorateEnglishPage).observe(app, { childList: true });
