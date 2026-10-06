@@ -8,7 +8,7 @@ const {readdir,readFile,writeFile}=await import('node:fs/promises');
 const {createHash}=await import('node:crypto');
 const assets=(await readdir('dist/assets')).filter(name=>/\.(js|css|woff2)$/.test(name)).map(name=>'assets/'+name);
 const files=['index.html','data/english/netem-v1.json','data/english/ecdict-v1.json',...assets];
-const hash=createHash('sha256');for(const file of files)hash.update(await readFile('dist/'+file));
+const hash=createHash('sha256').update('offline-shell-policy-v2');for(const file of files)hash.update(await readFile('dist/'+file));
 const version=hash.digest('hex').slice(0,16);
 const shell=await readFile('dist/index.html','utf8');
 await writeFile('dist/index.html',shell.replace('</head>',`<meta name="wenyan-build" content="${version}"></head>`));
@@ -20,10 +20,13 @@ async function installShell(){
  try{
   // An HTML response from a previous CDN/HTTP cache can reference assets that
   // are absent from this deployment. Never promote that mixed offline shell.
-  const shell=await fetch(new Request(new URL('index.html',ROOT),{cache:'reload'}));
+  const shellURL=new URL('index.html',ROOT);shellURL.searchParams.set('build','${version}');
+  const shell=await fetch(new Request(shellURL,{cache:'reload'}));
   if(!shell.ok||!(await shell.clone().text()).includes('<meta name="wenyan-build" content="${version}">'))throw Error('SHELL_VERSION_MISMATCH');
   await cache.put(new URL('index.html',ROOT).href,shell);
-  await cache.addAll(FILES.filter(path=>path!=='index.html').map(path=>new Request(new URL(path,ROOT),{cache:'reload'})));
+  // Fonts are cached on demand. Hundreds of unused Unicode font segments must
+  // not make the entire offline install fail on one transient CDN response.
+  await cache.addAll(FILES.filter(path=>path!=='index.html'&&!path.endsWith('.woff2')).map(path=>new Request(new URL(path,ROOT),{cache:'reload'})));
  }catch(error){await caches.delete(CACHE);throw error;}
 }
 self.addEventListener('install',event=>event.waitUntil(installShell()));
@@ -34,7 +37,10 @@ self.addEventListener('fetch',event=>{
  if(req.method!=='GET'||url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname)||url.search)return;
  const relative=url.pathname.slice(ROOT.pathname.length);
  if(req.mode==='navigate'&&(relative===''||relative==='index.html')){event.respondWith(caches.open(CACHE).then(cache=>cache.match(new URL('index.html',ROOT).href)).then(cached=>cached||fetch(req)));return;}
- if(FILES.includes(relative))event.respondWith(caches.open(CACHE).then(cache=>cache.match(req)).then(cached=>cached||fetch(req)));
+ if(FILES.includes(relative))event.respondWith(caches.open(CACHE).then(async cache=>{
+  const cached=await cache.match(req);if(cached)return cached;
+  const response=await fetch(req);if(response.ok)await cache.put(req,response.clone());return response;
+ }));
 });
 `);
 console.log('Offline desktop shell '+version);
