@@ -230,7 +230,13 @@ function openPanel(content){
  const title=panel.querySelector('h2');if(title){title.id='panel-title';panel.setAttribute('aria-labelledby','panel-title');}
  if(!panel.open)panel.showModal();
 }
-function closePanel(){panel.close();if(paused)paused=false;const target=panelReturnFocus?.isConnected?panelReturnFocus:$('#word-input');target?.focus();}
+function closePanel(){
+ const previous=panelReturnFocus;
+ panel.close();if(paused)paused=false;
+ if(['english','today'].includes(route()[0]))render();
+ const replacement=previous?.isConnected?previous:[...document.querySelectorAll('button,a')].find(el=>previous&&(previous.dataset.action?el.dataset.action===previous.dataset.action&&el.dataset.word===previous.dataset.word:previous.getAttribute('href')!=null&&el.getAttribute('href')===previous.getAttribute('href')));
+ (replacement||$('#word-input')||$('#main'))?.focus();
+}
 
 function settings(){openPanel(`<h2>偏好与备份</h2><label>外观 <select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗色</option></select></label><label class="check-label"><input id="voice" type="checkbox" ${autoVoice?'checked':''}/>训练时自动发音</label><p class="source-note">上班使用建议关闭发音。发音由浏览器提供。</p><hr/><h3>本机备份</h3><div class="panel-actions">${btn('export','导出记录')}${btn('import','导入记录')}${btn('import-text','粘贴备份','text-button')}</div><p class="source-note">记录保存在这台电脑的当前浏览器。导入会合并记录、复习安排和续学位置。建议定期导出一份备份。</p><input id="import-file" type="file" accept="application/json" hidden/>`);$('#theme').value=theme;}
 function appearance(){openPanel(`<h2>阅读外观</h2><label>字号 <input id="font-size" type="range" min="16" max="24" value="${readingSize}"/> <span id="size-label">${readingSize}px</span></label><label>行距 <select id="line-height"><option value="1.65">紧凑</option><option value="1.85">标准</option><option value="2">宽松</option></select></label><label>正文字体 <select id="reading-family"><option value="serif">宋体</option><option value="sans">黑体</option></select></label>`);$('#line-height').value=lineHeight;$('#reading-family').value=readingFamily;}
@@ -332,12 +338,6 @@ function updateViewport(){if(window.visualViewport)document.documentElement.styl
 window.visualViewport?.addEventListener('resize',updateViewport);window.addEventListener('resize',updateViewport);
 
 panel.addEventListener('cancel',e=>{e.preventDefault();closePanel();});
-panel.addEventListener('close',()=>{
- const previous=panelReturnFocus;
- if(['english','today'].includes(route()[0]))render();
- const replacement=previous?.isConnected?previous:[...document.querySelectorAll('button,a')].find(el=>previous&&(previous.dataset.action?el.dataset.action===previous.dataset.action&&el.dataset.word===previous.dataset.word:el.getAttribute('href')===previous.getAttribute('href')));
- (replacement||$('#word-input'))?.focus();
-});
 window.addEventListener('wenyan-change',()=>{if(store.problem)toast(store.problem);});
 window.addEventListener('wenyan-vocabulary-loaded',()=>{if(['today','english','train','results'].includes(route()[0]))render();if(panel.open&&$('#search-input'))searchResults();});
 applyTheme();render();
