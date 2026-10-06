@@ -157,11 +157,14 @@ try {
     assert.ok(!activeEvents(await events(restored)).some(event => event.id === last.eventId));
     await finishStep(restored); await restored.waitForURL(/#results$/);
     await restored.locator('a[href="#english"]').first().click();
+    await restored.waitForURL(/#english$/);
+    await restored.locator('.english-page').waitFor();
     // Search keyboard selection, learning detail, favorites / mastered, attribution.
     await restored.locator('main').press('/');
     await restored.locator('#search-input').fill('abandon');
     await restored.locator('#search-input').press('ArrowDown');
     await restored.locator('.search-result').first().press('Enter');
+    await restored.locator('.word-detail').waitFor();
     await shot(restored, dir, '12-detail');
     await restored.locator('[data-action="favorite"]').click();
     await restored.locator('[data-action="mastered"]').click();

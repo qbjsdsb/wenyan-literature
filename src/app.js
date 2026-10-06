@@ -180,6 +180,7 @@ function ratingActions(){
  $('#input-feedback').classList.remove('is-error');
  $('#input-feedback').textContent=failed?'订正已完成，稍后再回忆': '核对刚才的回忆，再自评';
  $('#memory-actions').innerHTML=`${btn('word-rate','没想起 <kbd>1</kbd>',failed?'primary':'','data-rating="1"')}${btn('word-rate','想起来了 <kbd>2</kbd>',failed?'':'primary',`data-rating="3" ${failed?'disabled':''}`)}`;
+ $('.training-progress .keyboard-note').textContent='Enter 继续 · 1 没想起'+(failed?'':' · 2 想起来了')+' · Esc 暂停';
  $('#memory-actions [data-rating="'+(failed?'1':'3')+'"]').focus();
 }
 function submitWord(){
