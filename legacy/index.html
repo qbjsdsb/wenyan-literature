@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>文研 · 文学考研助手</title>
+  <meta name="description" content="面向中国语言文学考研的知识点浏览、真题练习与记忆卡片工具。" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边导航 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">文</span>
+        <div class="brand-text">
+          <strong>文研</strong>
+          <small>文学考研助手</small>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="knowledge">
+          <span class="nav-ico">📚</span>知识点
+        </button>
+        <button class="nav-item" data-view="quiz">
+          <span class="nav-ico">✍️</span>真题练习
+        </button>
+        <button class="nav-item" data-view="cards">
+          <span class="nav-ico">🗂️</span>记忆卡片
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="progress-card">
+          <div class="progress-title">今日进度</div>
+          <div class="progress-row"><span>已练题</span><b id="stat-quiz">0</b></div>
+          <div class="progress-row"><span>已背卡</span><b id="stat-cards">0</b></div>
+          <button class="link-btn" id="reset-progress">重置进度</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <main class="main">
+      <header class="topbar">
+        <button class="menu-toggle" id="menu-toggle" aria-label="菜单">☰</button>
+        <h1 id="page-title">知识点</h1>
+        <div class="topbar-spacer"></div>
+      </header>
+
+      <section class="view" id="view-knowledge">
+        <div class="toolbar">
+          <div class="search">
+            <input type="search" id="knowledge-search" placeholder="搜索知识点、作者、作品……" />
+          </div>
+          <div class="chips" id="knowledge-chips"></div>
+        </div>
+        <div class="knowledge-grid" id="knowledge-grid"></div>
+      </section>
+
+      <section class="view hidden" id="view-quiz">
+        <div id="quiz-setup" class="card panel">
+          <h2>真题练习</h2>
+          <p class="muted">选择科目与题量，开始模拟练习。系统会自动判分并记录错题。</p>
+          <div class="form-row">
+            <label>科目
+              <select id="quiz-subject"></select>
+            </label>
+            <label>题量
+              <select id="quiz-count">
+                <option value="5">5 题</option>
+                <option value="10" selected>10 题</option>
+                <option value="20">20 题</option>
+                <option value="0">全部</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn primary" id="quiz-start">开始练习</button>
+        </div>
+
+        <div id="quiz-running" class="hidden">
+          <div class="quiz-meta">
+            <span id="quiz-index"></span>
+            <span class="muted" id="quiz-progress"></span>
+          </div>
+          <div class="card panel" id="quiz-question-wrap"></div>
+          <div class="quiz-actions">
+            <button class="btn" id="quiz-prev">上一题</button>
+            <button class="btn primary" id="quiz-next">下一题</button>
+            <button class="btn danger hidden" id="quiz-submit">交卷</button>
+          </div>
+        </div>
+
+        <div id="quiz-result" class="hidden card panel">
+          <h2>练习结果</h2>
+          <div class="score" id="quiz-score"></div>
+          <div class="muted" id="quiz-summary"></div>
+          <div class="quiz-actions">
+            <button class="btn primary" id="quiz-retry">再练一组</button>
+            <button class="btn" id="quiz-wrong">查看错题</button>
+          </div>
+          <div class="wrong-list hidden" id="quiz-wrong-list"></div>
+        </div>
+      </section>
+
+      <section class="view hidden" id="view-cards">
+        <div class="card panel" id="cards-panel">
+          <div class="cards-head">
+            <div>
+              <h2>记忆卡片</h2>
+              <p class="muted" id="cards-meta"></p>
+            </div>
+            <div class="cards-controls">
+              <select id="cards-subject"></select>
+            </div>
+          </div>
+
+          <div class="flashcard-stage">
+            <div class="flashcard" id="flashcard" tabindex="0">
+              <div class="flashcard-face front">
+                <span class="fc-label">名词</span>
+                <div class="fc-term" id="fc-term"></div>
+                <span class="fc-hint">点击 / 空格 翻面</span>
+              </div>
+              <div class="flashcard-face back">
+                <span class="fc-label">释义</span>
+                <div class="fc-def" id="fc-def"></div>
+                <span class="fc-hint">还记得吗？</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cards-actions">
+            <button class="btn danger" id="card-forgot">没记住</button>
+            <button class="btn primary" id="card-known">记住了</button>
+          </div>
+
+          <div class="cards-empty hidden" id="cards-empty">
+            <p>该科目暂无需要复习的卡片，或全部已掌握。🎉</p>
+            <button class="btn" id="card-reset-subject">重置该科目进度</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 知识点详情抽屉 -->
+  <div class="drawer hidden" id="detail-drawer">
+    <div class="drawer-mask" id="detail-mask"></div>
+    <aside class="drawer-panel">
+      <button class="drawer-close" id="detail-close">✕</button>
+      <div id="detail-body"></div>
+    </aside>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

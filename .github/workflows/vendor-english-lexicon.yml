@@ -1,0 +1,47 @@
+name: vendor english lexicon
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: npm ci
+      - name: Generate pinned ECDICT enrichment
+        run: python3 scripts/sync-english-lexicon.py
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit generated enrichment
+        shell: bash
+        run: |
+          changes="$(git status --porcelain -- public/data/english/ecdict-v1.json public/data/english/ecdict-v1.meta.json)"
+          if [ -z "$changes" ]; then
+            echo "ECDICT enrichment already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/english/ecdict-v1.json public/data/english/ecdict-v1.meta.json
+          git commit -m "data(english): vendor pinned ECDICT enrichment"
+          git push origin HEAD:${GITHUB_REF_NAME}

@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "generatedFrom": "https://raw.githubusercontent.com/skywind3000/ECDICT/82c9872576b23118d7c42e920c11beb77f510ae2/ecdict.csv",
+  "sourceCommit": "82c9872576b23118d7c42e920c11beb77f510ae2",
+  "targetCount": 5528,
+  "matchedCount": 5519,
+  "phoneticCount": 5509,
+  "posCount": 0,
+  "exchangeCount": 4621,
+  "sha256": "3299f432acca162e63723dc26de1d428677c0f2e1210fdc6d0e37944fa18a01f"
+}
