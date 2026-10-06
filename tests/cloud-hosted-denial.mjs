@@ -7,6 +7,16 @@ const example=Object.fromEntries((await readFile('.env.example','utf8')).split('
 const url=process.env.VITE_SUPABASE_URL||example.VITE_SUPABASE_URL,key=process.env.VITE_SUPABASE_PUBLISHABLE_KEY||example.VITE_SUPABASE_PUBLISHABLE_KEY;
 assert.ok(url.startsWith('https://')&&key.startsWith('sb_publishable_'));
 const results=[];
+// Public Auth settings shape: supabase/auth internal/api/settings.go. This
+// verifies hosted configuration, independently of the local CLI config.toml.
+const settingsResponse=await fetch(url+'/auth/v1/settings',{headers:{apikey:key},signal:AbortSignal.timeout(15000)});
+assert.equal(settingsResponse.status,200,'hosted Auth settings are readable');
+const authSettings=await settingsResponse.json();
+assert.equal(authSettings.disable_signup,true,'public registration must be disabled');
+assert.equal(authSettings.external?.anonymous_users,false,'anonymous sign-in must be disabled');
+assert.equal(authSettings.external?.email,true,'owner email/password sign-in must remain enabled');
+assert.equal(authSettings.mailer_autoconfirm,false,'public email confirmation must remain enabled');
+results.push({name:'hosted Auth configuration',status:200,signupDisabled:true,anonymousEnabled:false,emailEnabled:true,confirmEmail:true});
 async function denied(name,path,{body,headers={},statuses,codes}={}){
  const response=await fetch(url+'/rest/v1/'+path,{method:body?'POST':'GET',headers:{apikey:key,Authorization:'Bearer '+key,...(body?{'Content-Type':'application/json'}:{}),...headers},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
  const result=await response.json();assert.ok(statuses.includes(response.status),name+': unexpected HTTP '+response.status);assert.ok(codes.includes(result.code),name+': unexpected denial '+result.code);results.push({name,status:response.status,code:result.code});

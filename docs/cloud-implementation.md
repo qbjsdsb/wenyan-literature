@@ -58,4 +58,4 @@ npm run build
 - [0008 RLS no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)：config/receipts/forks 是 private 元数据，无 table grant，无 policy 默认拒绝，属于预期。
 - [0001 unindexed FK](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys)：config 是强约束 singleton，仅一行，当前不为此增加索引。
 
-`tests/cloud-hosted-denial.mjs` 经独立 GitHub CI 对真实 hosted REST API 检查 anon RPC、private schema、public table 绕过和无效签名 JWT；只用 public key，不创建假用户、不写学习事实。它不证明 owner 登录、真实第二用户、refresh/revoke 或 MCP client 成功。
+`tests/cloud-hosted-denial.mjs` 经独立 GitHub CI 对真实 hosted REST API 检查 anon RPC、private schema、public table 绕过和无效签名 JWT；另读取 Auth 公共 settings，断言禁用 signup/anonymous、Email provider 开启且 public email confirm 保留。字段依据 [Supabase Auth 官方实现](https://github.com/supabase/auth/blob/master/internal/api/settings.go)，避免把本地 CLI 配置当托管状态。只用 public key，不创建假用户、不写学习事实。它不证明 owner 登录、真实第二用户、refresh/revoke 或 MCP client 成功。
