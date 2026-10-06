@@ -1,0 +1,44 @@
+name: apply english core v2
+
+on:
+  push:
+    branches:
+      - feature/english-core-v2
+    paths:
+      - scripts/apply-english-core-v2.mjs
+      - .github/workflows/apply-english-core-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Apply patch
+        run: node scripts/apply-english-core-v2.mjs
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit verified application change and remove one-time patch files
+        shell: bash
+        run: |
+          rm scripts/apply-english-core-v2.mjs .github/workflows/apply-english-core-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app.js scripts/apply-english-core-v2.mjs .github/workflows/apply-english-core-v2.yml
+          git commit -m "feat(english): add smart queue and wrong-word view"
+          git push origin HEAD:${GITHUB_REF_NAME}
