@@ -143,17 +143,17 @@ function decorateEnglishPage() {
   }
 }
 
-const cached = readCache();
-if (cached) activate(cached, { fromCache: true });
-
 const app = document.getElementById('app');
-if (app) new MutationObserver(decorateEnglishPage).observe(app, { childList: true, subtree: true });
-decorateEnglishPage();
+if (app) new MutationObserver(decorateEnglishPage).observe(app, { childList: true });
 
 window.addEventListener('wenyan-vocabulary-loaded', () => {
-  decorateEnglishPage();
   if (location.hash === '#english') window.dispatchEvent(new Event('hashchange'));
+  else decorateEnglishPage();
 });
+
+const cached = readCache();
+if (cached) activate(cached, { fromCache: true });
+else decorateEnglishPage();
 
 if (navigator.onLine !== false) {
   fetchCatalog()
