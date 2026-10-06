@@ -133,7 +133,7 @@ Supabase开发管理MCP用于Work管理工程，**不等于Wenyan学习MCP**。�
 | get_word_history | 指定稳定ID的有界事实与card；首次/提示后/订正/撤销/未知分开 |
 | preview_study_session | 时间预算+Smart planner，输出建议词/主动作/网站链接；不写session或due；无耗时历史标估算 |
 
-cloud与browser共享锁定版本的JS reducer。MCP以已确认事实计算投影；若后期缓存，必须带输入水位并在失效时重建。云事实写入、读取授权与投影计算分开，不让MCP凭投影管理权绕过RLS。全量历史首次bootstrap可分页，以后增量；合成年级规模数据评估性能后再决定cache。
+cloud与browser共享锁定版本的JS reducer。MCP以已确认事实计算投影；若后期缓存，必须带输入水位并在失效时重建。云事实写入、读取授权与投影计算分开，不让MCP凭投影管理权绕过RLS。全量历史首次bootstrap可分页，以后增量；用合成的多年学习规模数据评估性能后再决定cache。
 
 共同返回as_of、已提交水位/projection revision、时区、content/scheduler版本、窗口、样本、unknown/coverage、证据ID和分页。云无法知道未联网设备outbox数量，只能说“截至最近收到的数据”。相邻工具可要求同水位；历史快照不可用就stale/retry，不把不同时间统计拼成精确因果。
 
