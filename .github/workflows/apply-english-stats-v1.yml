@@ -6,6 +6,9 @@ on:
       - feature/english-stats-v1
     paths:
       - scripts/apply-english-stats-v1.mjs
+      - src/english/stats.js
+      - tests/english-stats.test.mjs
+      - src/english-stats.css
       - .github/workflows/apply-english-stats-v1.yml
 
 permissions:
