@@ -86,7 +86,13 @@ try {
     await page.locator('#word-input').pressSequentially('hfm ');
     assert.equal((await session(page)).index, 0);
     assert.ok(!(await events(page)).some(event => ['favorite', 'mastered'].includes(event.kind)));
-    await finishStep(page);
+    // Exercise composition guards through DOM events; native OS IME remains a manual check.
+    await page.locator('#word-input').dispatchEvent('compositionstart', { data: '' });
+    await page.locator('#word-input').fill(byId.get(freshId).word);
+    await page.locator('#word-input').dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    assert.equal((await session(page)).index, 0);
+    await page.locator('#word-input').dispatchEvent('compositionend', { data: byId.get(freshId).word });
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).index === 1, key('wenyan-session'));
     assert.equal(reviewCard(await events(page), `word:${freshId}`).reps, 0);
     while ((await session(page)).queue[(await session(page)).index] !== freshId) await finishStep(page);
     current = await session(page);
@@ -112,7 +118,14 @@ try {
     assert.ok(retryAt > current.index, 'retry must have intervening words');
     assert.equal(reviewCard(await events(page), `word:${freshId}`).reps, 1);
     // Hints persist immediately; hinted answers never become Good.
-    await page.locator('[data-action="hint"]').click();
+    await page.locator('[data-action="favorite-word"]').press('f');
+    assert.equal(await page.locator('[data-action="favorite-word"]').getAttribute('aria-pressed'), 'true');
+    await page.locator('[data-action="mastered-word"]').press('m');
+    assert.equal(await page.locator('[data-action="mastered-word"]').getAttribute('aria-pressed'), 'true');
+    await page.locator('[data-action="mastered-word"]').press('m');
+    await page.locator('[data-action="favorite-word"]').press('h');
+    await page.locator('[data-action="favorite-word"]').press('Space');
+    assert.equal(await page.locator('.word-stage').evaluate(el => getComputedStyle(el).animationName), 'none');
     await page.reload(); await ready(page);
     assert.equal((await session(page)).current.hinted, true);
     await shot(page, dir, '09-hint');
