@@ -13,13 +13,13 @@
 
 当前真实验收清单：[`english/VALIDATION.md`](english/VALIDATION.md)。
 
-## 当前基线
+## 当前基线与研究入口
 
-旧 PR #2—#10 是历史 stacked PR，保留追溯价值，但不再继续向上叠开发。
+main为桌面英语v1；#12是未合并的Smart Session/Experience v2；#13是独立云端与MCP研究Draft。旧#2—#10不续接，#1文学审计冻结。接手读取实时main/PR/CI，不把文档SHA当永久head。
 
-正式基线为远端最新 `main`，PR #11 已合入。当前续接工作：PR #12 `feature/english-experience-v2`（Draft），从 main 直接创建。
+新增研究入口：[research/CLOUD-MCP.md](research/CLOUD-MCP.md)。保存方案比较、官方依据、同步/身份/MCP未知门槛与风险；不是第二份进度表。架构图在ARCHITECTURE，路线/验收在ROADMAP。
 
-当前规则：Desktop-first、English-first、文学冻结。先审计真实体验，再局部改进 Smart Session 和桌面学习层级，不自动合并或发布。
+当前方向：Desktop-first、English-first；云长期事实与本地即时响应；ChatGPT可更换推理层。云端/Auth/MCP尚未实现，文学/手机专项冻结。
 
 ## 文档分类
 
@@ -65,7 +65,8 @@ README
 → ROADMAP
 → english/PLAN
 → english/VALIDATION
-→ 远端最新 main / 当前 Draft 分支代码
+→ research/CLOUD-MCP（本任务）
+→ 实际main与进行中PR代码
 ```
 
 如果文档与远端实际状态冲突，**以实际远端为准，并立即修正 `docs/开发进度.md`**。
