@@ -27,9 +27,11 @@
 ## 继续前必须验证
 
 1. 开启官方 OAuth Server，DCR 保持关闭，使用预注册单 client 和精确 redirect；本人完成 OAuth 同意。
-2. `/oauth/consent.html` 使用同一网页登录 session、SDK 读取真实详情，精确批准 client 与 scope，不自动同意。
+2. 已准备的 `/oauth/consent.html` 使用同一网页登录 session、SDK 读取真实详情，精确批准 client 与 scope，不自动同意。
 3. 实测 authorize/token 携带相同 resource 后 JWT aud；文档仍展示 authenticated 默认 audience。若托管 token 不满足精确 audience，启用仅批准 client 的 Custom Access Token Hook；不能放宽 MCP audience 或自行签 token。
 4. 真实 PKCE、refresh、撤销、PostgREST 专用 audience 兼容、owner read / OAuth commit 拒绝、未知 client / 第二用户 / 直接 API 负例。
 5. Inspector 和代表性 prompt 通过后再安装个人 Plugin。Plugin manifest 只是准备，不能视为实际安装；Tutor Skill 继续等待只读授权闭环稳定。
 
 官方来源： [Supabase OAuth flows](https://supabase.com/docs/guides/auth/oauth-server/oauth-flows)、[Token security / Custom Access Token Hook](https://supabase.com/docs/guides/auth/oauth-server/token-security)、[Auth 授权 URL 拼接实现](https://github.com/supabase/auth/blob/master/internal/api/oauthserver/authorize.go)、[OpenAI Plugin authentication](https://developers.openai.com/plugins/build/auth)、[Plugin package](https://developers.openai.com/plugins/build/plugins)。Site URL 带仓库子路径，Auth 在其后拼接 `/oauth/consent.html`，不是 origin 根路径。
+
+已应用 OAuth preparation migration，未配置/启用 token hook。Hook 仅 Auth admin execute，不信任 user_metadata 的 client 字段，第一方 claims 保持原值；其他用户/client/匿名 OAuth 拒绝。个人 Plugin portable manifest 位于 `plugins/wenyan`，没有 token 或秘密 headers；待实际安装。

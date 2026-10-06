@@ -38,7 +38,7 @@ npm run build
 
 `.env.example` 只有 URL 和 publishable key。运行时密码直接送 Supabase Auth；token 只由 SDK 处理，不进入 JSON/日志/Git。绑定 owner 前先验证云 RPC授权，其他账号不能接管本机学习历史。
 
-本机保留五份轮转快照，设置里可查看与合并恢复点，并有 JSON 人工备份。私密异地自动备份、托管恢复演练及真正固定 HTTPS 入口仍须在部署阶段完成，不能声称同步等于备份。
+本机保留五份轮转快照，设置里可查看与合并恢复点，并有 JSON 人工备份。私密异地快照与每日任务已建立，首个未来定时运行和托管灾难恢复仍须验证，不能声称同步等于备份。
 
 回滚原则：不退回只写 localStorage 的旧构建。代码回滚须继续支持 v3 数据读取；停云后本机可学。迁移初始 config.owner_id=null，默认全拒绝，只有由管理面绑定本人的 Auth UUID 才可写。
 
@@ -51,7 +51,7 @@ npm run build
 
 管理面启用 Pages、固定实际 HTTPS origin、Auth site URL/精确 callback、禁用托管注册/匿名、绑定 owner 和真实安全验收均由 Work 在登录后完成。构建拒绝 secret/service_role browser key；不使用管理员 token 部署前端。rollback 选可读写 v3 的旧构建，不能退回 main 的 v2 writer。未来 MCP consent/受保护资源 discovery 需另做真实验证，当前没有 mock Plugin 成功。
 
-目前大时钟漂移隔离/恢复尚未完成：不要手改事实时间强行清空 outbox。SQL 的 received_at 保留服务器接收审计，未来时间超一天拒绝，本机 effective at 保证同设备单调。托管验收必须包含系统时间向前/向后改变、重开与多设备迟到重放。
+大时钟漂移已通过本机 wall/monotonic 与云 as_of 比较实施隔离和恢复；完全离线冷启动无法证明真实墙钟。不要手改事实时间强行清空 outbox。SQL 的 received_at 保留服务器接收审计，未来时间超一天拒绝，本机 effective at 保证同设备单调。托管验收必须包含系统时间向前/向后改变、重开与多设备迟到重放。
 
 
 ## 托管 advisors 判断
@@ -69,3 +69,5 @@ npm run build
 `scripts/export-cloud-backup.sql` 在一份 PostgreSQL 快照内导出 schema 3、事实、checkpoint、设置及可恢复水位/收据/fork；不读取 Auth 或导出 secret。结果只保存本人私密文件。可先关闭云连接、在干净浏览器导入 schema 3、核对事实与续学，再由受信管理面初始化新云身份和云协议。不直接向仍在线项目回滚旧表。
 
 当前独立每日任务利用已授权管理连接器生成私密文件，依赖这些连接器持续有效；未来运行与整库灾难恢复仍须验证。不要将任务创建成功描述为多年无人维护保证。
+
+OAuth preparation 已在托管应用，仅 owner 第一方会话可读 policy，token hook 仅 Auth admin execute；两者不自动启用 OAuth/MCP，不绑定 client。授权与个人 Plugin 的真实门槛见 [mcp-implementation](mcp-implementation.md)。

@@ -59,7 +59,7 @@ Smart Session / English Experience v2 已在 #12 完成自动验收并被 #14 �
 
 MCP 只读取云端已提交事实，不读取本机未同步 outbox；返回必须包含数据截止时间、时区、水位、样本量和缺失信息。
 
-下一门槛不是继续写工具，而是 OAuth：
+固定授权页面、可选 Auth token hook 和个人 Plugin package 已准备，MCP 授权仍关闭。下一门槛是实际 OAuth：
 - 使用官方 Supabase OAuth / MCP 认证能力。
 - 专用 resource/audience、真实 owner、live session、批准 client。
 - 匿名、错误 audience、其他 client、其他用户和直接 Data API 绕过必须失败。

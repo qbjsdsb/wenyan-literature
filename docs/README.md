@@ -74,3 +74,5 @@ README
 
 如果文档与远端实际状态冲突，**以实际远端为准，并立即修正 `docs/开发进度.md`**。
 
+
+云专项：[同步实施](cloud-implementation.md)、[私密备份](cloud-backup.md)、[MCP 授权与只读边界](mcp-implementation.md)。

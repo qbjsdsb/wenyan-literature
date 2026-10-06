@@ -73,7 +73,7 @@ flowchart TD
 - owner序列化提交生成已提交事实游标；不能用客户端时间或未提交序列最大值。固定水位分页，落盘后推进cursor。
 - 设置/可续学 session 每次取当前快照，独立 revision；恢复点整份原子导入。冲突由本人选择云端位置或本机另存新组，并发 mastered 保守保留复习、收藏保留可见性；不预造全表changefeed。非事件重试先查持久提交收据再CAS，收据在操作仍未确认时不可过期。
 - 默认单活跃session写者。本机 revision CAS、云 baseRevision/baseOperation CAS；并发旧writer保存fork，事实并集，绝不按updated_at覆盖整组。
-- FSRS按固定合法发生时间/设备ordinal/ID重放，晚到影响的词重算；received_at 只审计。目前有效时间保证同设备单调、超一天未来事件拒绝；大漂移隔离/恢复仍是上线前待实施验收项，不能改旧事实掩盖错误。
+- FSRS按固定合法发生时间/设备ordinal/ID重放，晚到影响的词重算；received_at 只审计。有效时间保证同设备单调、超一天未来事件拒绝；本机 wall/monotonic 与云 as_of 超过 5 分钟漂移时停写/停上传，保留原事实与 outbox。完全离线冷启动不证明真实时间，不能改旧事实掩盖错误。
 - 启动/focus/online/短批flush/组完成同步；401暂停上传；关闭前尽力不是数据保障。
 - IDB/outbox解决断网继续；Service Worker静态缓存另解决断网重开。只缓存版本化应用/内容，不缓存Auth/个人API，不在训练途中激活新版本。
 
@@ -89,7 +89,7 @@ OAuth Server当前beta；网站提供小型登录/consent页，SDK读取详情�
 
 ## 7. MCP与AI
 
-首版五读工具：overview、review pressure、problem words、word history、session preview。返回时间窗/分母/样本/证据/版本/云水位/缺失；无法宣称看到离线电脑未上传记录。工具输入不收模型指定owner，身份从验证token获得。
+首版五读工具：overview、review pressure、problem words、word history、session preview。使用 stateless Streamable HTTP，精确 resource/aud、非对称验签与每请求 live RPC 复核；10,000 facts / 25 pages 预算超限时不计算 FSRS/掌握结论。返回时间窗/分母/样本/证据/版本/云水位/缺失；无法宣称看到离线电脑未上传记录。工具输入不收模型指定owner，身份从验证token获得。
 
 不暴露通用SQL、表CRUD、删除、直接改due/card/参数、编造review。以后可逆计划/收藏/目标变更先差异预览+明确请求+幂等+revision+撤销；小批mastered需要精确proposal与本人确认。实际输入与可靠评分留网站。
 
