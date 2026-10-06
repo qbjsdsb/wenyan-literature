@@ -354,7 +354,7 @@ window.addEventListener('wenyan-cloud-status',()=>{document.querySelectorAll('.s
 window.addEventListener('wenyan-change',()=>{if(store.problem)toast(store.problem);});
 window.addEventListener('wenyan-vocabulary-loaded',()=>{if(['today','english','train','results'].includes(route()[0]))render();if(panel.open&&$('#search-input'))searchResults();});
 applyTheme();render();
-if('serviceWorker' in navigator&&!new URLSearchParams(location.search).has('test'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&!new URLSearchParams(location.search).has('test'))navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).catch(()=>{});
 void localSnapshot().catch(()=>{});
 navigator.storage?.persist?.().catch(()=>{});
 initializeVocabulary({getPendingWordIds:()=>pendingEnglishWordIds(session)});
