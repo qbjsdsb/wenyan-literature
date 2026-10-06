@@ -9,11 +9,13 @@ import {
   resolveEnglishLayer,
   selectActiveCatalog
 } from './english/catalog.js';
+import { applyLexiconEnrichment } from './english/lexicon.js';
 
 const LEGACY_CACHE_KEY = 'wenyan-netem-catalog-v1';
 const LAYER_KEY = 'wenyan-english-layer-v1';
 const DATASET_PAGE = `https://github.com/${NETEM_SOURCE_REPO}`;
 const LOCAL_SNAPSHOT = '/data/english/netem-v1.json';
+const LEXICON_SNAPSHOT = '/data/english/ecdict-v1.json';
 const DATASET_URLS = [
   LOCAL_SNAPSHOT,
   `https://cdn.jsdelivr.net/gh/${NETEM_SOURCE_REPO}@${NETEM_SOURCE_COMMIT}/netem_full_list.json`,
@@ -23,6 +25,7 @@ const DATASET_URLS = [
 const seedWords = words.map(word => ({ ...word }));
 const seedById = new Map(seedWords.map(word => [word.id.toLowerCase(), word]));
 let catalog = null;
+let lexiconPayload = null;
 let activeLayer = readLayer();
 
 export const vocabularyMeta = {
@@ -33,7 +36,11 @@ export const vocabularyMeta = {
   sourceCommit: NETEM_SOURCE_COMMIT,
   license: '内置样本',
   layer: activeLayer,
-  bundled: false
+  bundled: false,
+  lexicon: false,
+  phoneticCount: 0,
+  posCount: 0,
+  exchangeCount: 0
 };
 
 function readLayer() {
@@ -64,7 +71,7 @@ function withRuntimeFields(item) {
   const seed = seedById.get(item.id);
   return {
     ...item,
-    ipa: seed?.ipa ?? item.ipa ?? '',
+    ipa: seed?.ipa || item.ipa || '',
     source: `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(item.word.toLowerCase())}`
   };
 }
@@ -72,7 +79,8 @@ function withRuntimeFields(item) {
 function activate(nextCatalog, { bundled = false, source = 'NETEMVocabulary' } = {}) {
   if (!isCompleteCatalog(nextCatalog)) return false;
   catalog = nextCatalog;
-  const active = selectActiveCatalog(catalog, seedWords, activeLayer).map(withRuntimeFields);
+  const enriched = lexiconPayload ? applyLexiconEnrichment(catalog, lexiconPayload) : catalog;
+  const active = selectActiveCatalog(enriched, seedWords, activeLayer).map(withRuntimeFields);
   words.splice(0, words.length, ...active);
   Object.assign(vocabularyMeta, {
     status: 'ready',
@@ -82,7 +90,11 @@ function activate(nextCatalog, { bundled = false, source = 'NETEMVocabulary' } =
     sourceCommit: NETEM_SOURCE_COMMIT,
     license: 'CC BY-NC-SA 4.0',
     layer: activeLayer,
-    bundled
+    bundled,
+    lexicon: Boolean(lexiconPayload),
+    phoneticCount: Number(lexiconPayload?.phoneticCount) || 0,
+    posCount: Number(lexiconPayload?.posCount) || 0,
+    exchangeCount: Number(lexiconPayload?.exchangeCount) || 0
   });
   window.__wenyanVocabularyMeta = { ...vocabularyMeta };
   window.dispatchEvent(new CustomEvent('wenyan-vocabulary-loaded', { detail: { ...vocabularyMeta } }));
@@ -109,6 +121,18 @@ async function loadCatalog() {
     }
   }
   throw lastError ?? new Error('Vocabulary load failed');
+}
+
+async function loadLexicon() {
+  try {
+    const response = await fetch(LEXICON_SNAPSHOT, { cache: 'default' });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    if (!payload?.entries || Number(payload.matchedCount) < 5000) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 function layerOptions() {
@@ -145,7 +169,8 @@ function decorateEnglishPage() {
   if (note) {
     if (vocabularyMeta.status === 'ready') {
       const origin = vocabularyMeta.bundled ? '随 Wenyan 构建发布的固定快照' : '固定提交回退源';
-      note.innerHTML = `词频与释义来自 <a href="${DATASET_PAGE}" target="_blank" rel="noopener">NETEMVocabulary</a>，数据许可 CC BY-NC-SA 4.0。当前使用 ${origin}（${NETEM_SOURCE_COMMIT.slice(0, 12)}），不再跟随上游 master 漂移；上游 5530 行规范化为 ${vocabularyMeta.total} 个唯一词条。`;
+      const lexicon = vocabularyMeta.lexicon ? `；另有 ${vocabularyMeta.phoneticCount} 词音标 / ${vocabularyMeta.posCount} 词词性由固定 ECDICT enrichment 补充` : '';
+      note.innerHTML = `词频与释义来自 <a href="${DATASET_PAGE}" target="_blank" rel="noopener">NETEMVocabulary</a>，数据许可 CC BY-NC-SA 4.0。当前使用 ${origin}（${NETEM_SOURCE_COMMIT.slice(0, 12)}），不再跟随上游 master 漂移；上游 5530 行规范化为 ${vocabularyMeta.total} 个唯一词条${lexicon}。`;
     } else {
       note.textContent = '当前使用内置基础词组；固定考研词库未能载入时仍可继续练习。';
     }
@@ -177,8 +202,11 @@ window.addEventListener('wenyan-vocabulary-loaded', () => {
 });
 
 decorateEnglishPage();
-loadCatalog()
-  .then(result => activate(result.catalog, result))
+Promise.all([loadCatalog(), loadLexicon()])
+  .then(([result, lexicon]) => {
+    lexiconPayload = lexicon;
+    activate(result.catalog, result);
+  })
   .catch(() => {
     vocabularyMeta.status = 'sample';
     decorateEnglishPage();
