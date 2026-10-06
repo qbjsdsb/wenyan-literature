@@ -2,6 +2,8 @@
 
 本文件记录 Desktop English Baseline v1 的工程验收事实，并作为后续回归测试参考。
 
+English Experience v2 的本轮验收见 [`EXPERIENCE-VALIDATION.md`](EXPERIENCE-VALIDATION.md)；下文是 #11 baseline 历史，不代表 #12 已合入 main。
+
 ## 当前状态
 
 Desktop English Baseline v1 已于 2026-10-06 通过 PR #11 正式合入 `main`。
@@ -172,3 +174,4 @@ main push CI：通过
 5. 再按真实数据决定到期排序、session 压缩和长期性能优化。
 
 文学继续冻结，直到英语桌面端稳定长期使用。
+

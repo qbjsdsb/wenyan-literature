@@ -14,6 +14,8 @@
 
 此前 PR #2—#10 的有效英语成果已被 #11 收拢；旧 PR 仅保留历史追溯价值，不再作为开发父链。PR #1 是独立文学内容审计线，继续冻结。
 
+本分支的 English Experience v2 见 [Draft PR #12](https://github.com/qbjsdsb/wenyan-literature/pull/12)，尚未进入 main。以下能力包含本分支改进；正式上线状态以远端 main 和 `docs/开发进度.md` 为准。
+
 ## 英语当前能力
 
 ### 词库
@@ -24,7 +26,10 @@
 - 兼容词与未完成 session 的 carryover 不污染正式层级计数。
 
 ### 训练
-- 跟打 / 默写 / 听写。
+- 默认 Smart Session：开始今天学习；到期 / 错词直接主动回忆，新词先完整跟打，再在本组稍后回忆。
+- 跟打接触仅记录 typing；主动回忆才记录 review 并启动 / 更新 FSRS。
+- 失败先完整订正，再有界延后回流，不把提示或订正当独立答对。
+- 自由练习保留跟打 / 默写 / 听写；自由默写和听写的自评仍用于复习排程。
 - 首次拼错保留，必须完整订正。
 - `ts-fsrs` 负责主动回忆调度。
 - 智能队列：`到期 → 近期错词 → 新词`。
@@ -66,16 +71,16 @@ PR #11 合并前已经通过：
 
 合并到 `main` 后，push CI 也再次成功。
 
-详细证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)。
+Baseline 历史证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)。本分支 56 项测试与两路径三尺寸 Smart dist 验收见 [`EXPERIENCE-VALIDATION.md`](docs/english/EXPERIENCE-VALIDATION.md)。
 
 ## 当前下一步
 
 现在不继续堆新训练模式。
 
 顺序固定为：
-1. **提供固定电脑端访问入口。**
-2. 开始连续真实使用，让学习记录在稳定 origin 下长期积累。
-3. 下一个优先功能：**快速筛词**，用真实个人判断淘汰已经掌握的基础词，而不是再写硬编码黑名单。
+1. 验收 Smart Session 与桌面体验，保留一个 Draft PR。
+2. 下一项产品开发：**快速筛词**（1 已掌握 / 2 模糊 / 3 不会），复用现有历史与状态，不写基础词黑名单。
+3. 在固定 origin 下连续使用；访问入口和发布需另行明确安排，本轮不发布。
 4. 再根据真实数据决定：到期排序、session 日志压缩、长期性能优化。
 5. 只有出现真实多电脑需求时才做单人薄同步。
 6. 再做反复错词 / 高频难词语境强化。
@@ -133,3 +138,4 @@ npm run build
 ECDICT 只用于结构化 enrichment（当前主要是音标和词形变化），不替换 NETEM 中文释义，也不批量导入例句正文。详见 `docs/third-party/`。
 
 英语交互参考 Qwerty Learner、TypeWords、Clozemaster 等成熟产品，但不直接混入会改变本仓库许可义务的 GPL 程序代码。
+

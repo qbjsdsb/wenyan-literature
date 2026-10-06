@@ -6,9 +6,9 @@ import { reviewCard, mergeEvents, latest, validEvent, activeEvents } from '../sr
 import { importEvents, exportState } from '../src/backup.js';
 import { readFileSync } from 'node:fs';
 
-const session = options => createSmartSession({ id: 'smart-session-123', ...options });
+const session = options => createSmartSession({ id: '00000000-0000-4000-8000-000000000000', ...options });
 let seq = 0;
-function event(kind, key, value) { return { id: `smart-event-${String(++seq).padStart(8, '0')}`, kind, key, value, device: 'smart-qa', at: Date.now() + seq }; }
+function event(kind, key, value) { return { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, kind, key, value, device: 'smart-qa', at: Date.now() + seq }; }
 function finish(s, { correct = true, hint = false, rating = 3 } = {}) {
   if (hint) s = markEnglishSessionHinted(s);
   s = recordEnglishFirstAttempt(s, correct, hint);
