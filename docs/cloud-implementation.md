@@ -50,3 +50,12 @@ npm run build
 管理面启用 Pages、固定实际 HTTPS origin、Auth site URL/精确 callback、禁用托管注册/匿名、绑定 owner 和真实安全验收均由 Work 在登录后完成。构建拒绝 secret/service_role browser key；不使用管理员 token 部署前端。rollback 选可读写 v3 的旧构建，不能退回 main 的 v2 writer。未来 MCP consent/受保护资源 discovery 需另做真实验证，当前没有 mock Plugin 成功。
 
 目前大时钟漂移隔离/恢复尚未完成：不要手改事实时间强行清空 outbox。SQL 的 received_at 保留服务器接收审计，未来时间超一天拒绝，本机 effective at 保证同设备单调。托管验收必须包含系统时间向前/向后改变、重开与多设备迟到重放。
+
+
+## 托管 advisors 判断
+
+- [0029 authenticated SECURITY DEFINER](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)：两个 RPC 明确需要此窄事务能力，保留告警并审查；空 search_path、live owner/client 授权和 anon revoke 都已核对。改 INVOKER 后开放表 DML 反而破坏当前边界。
+- [0008 RLS no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)：config/receipts/forks 是 private 元数据，无 table grant，无 policy 默认拒绝，属于预期。
+- [0001 unindexed FK](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys)：config 是强约束 singleton，仅一行，当前不为此增加索引。
+
+`tests/cloud-hosted-denial.mjs` 经独立 GitHub CI 对真实 hosted REST API 检查 anon RPC、private schema、public table 绕过和无效签名 JWT；只用 public key，不创建假用户、不写学习事实。它不证明 owner 登录、真实第二用户、refresh/revoke 或 MCP client 成功。

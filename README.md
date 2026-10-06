@@ -79,7 +79,7 @@ Baseline 历史证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.
 
 [Draft PR #13](https://github.com/qbjsdsb/wenyan-literature/pull/13) 只研究下一阶段：**静态Wenyan + IndexedDB本地即时保存 + Supabase长期事实/Auth + 只读Wenyan MCP + ChatGPT推理**。没有实现云端、安装插件或发布。
 
-[Draft PR #14](https://github.com/qbjsdsb/wenyan-literature/pull/14) 整合 #12 的 Smart 代码与 #13 研究，已实现 IndexedDB 原子学习、outbox、JSON v3/恢复点、Supabase 私有 schema/RPC、Auth UI 与薄同步。main 保持不变。云 migration 尚未应用，正式部署、MCP 与 Plugin 还未完成；快速筛词后置，不重写英语 UX。
+[Draft PR #14](https://github.com/qbjsdsb/wenyan-literature/pull/14) 整合 #12 的 Smart 代码与 #13 研究，已实现 IndexedDB 原子学习、outbox、JSON v3/恢复点、Supabase 私有 schema/RPC、Auth UI 与薄同步。main 保持不变。托管 schema/RLS/RPC 已应用，owner/Auth 与真实同步尚未验收；正式部署、MCP 与 Plugin 还未完成；快速筛词后置，不重写英语 UX。
 
 用户尚未开始正式使用，没有需要迁移的真实学习历史。schema 2不作为永久协议；云基础允许有理由的一次升级，保留Smart Session、FSRS、稳定word ID、首次结果与JSON备份。
 

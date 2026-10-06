@@ -4,7 +4,7 @@
 
 ## 1. 当前代码
 
-main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Smart 与研究，新增 IDB 原子事务/独立 checkpoint/outbox、窄 Supabase RPC 和 SDK Auth/薄同步。migration 代码存在，尚未在托管项目应用。Desktop-first、English-first，文学与手机专项冻结，不换框架。
+main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Smart 与研究，新增 IDB 原子事务/独立 checkpoint/outbox、窄 Supabase RPC 和 SDK Auth/薄同步。migration 已应用托管项目，owner 尚未绑定、MCP 默认关闭；Auth/真实网络同步仍待验收。Desktop-first、English-first，文学与手机专项冻结，不换框架。
 
 | 模块 | 职责 |
 | --- | --- |
