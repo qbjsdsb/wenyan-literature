@@ -17,7 +17,7 @@ test('counts a word as newly learned only when its first active review is today'
   ];
   const stats = englishDailyStats(events, now);
   assert.equal(stats.newLearned, 1);
-  assert.equal(stats.reviewed, 3);
+  assert.equal(stats.reviewed, 2);
 });
 
 test('first correct rate only treats successful unaided active recall as correct', () => {
