@@ -13,6 +13,7 @@
   <script>setTimeout(()=>{const link=document.getElementById('reload-app');if(link){link.hidden=false;link.href='?reload='+Date.now()+location.hash;link.parentElement.firstChild.textContent='文研暂时未能打开。学习记录仍保留在这台电脑。';}},10000);</script>
   <dialog id="panel"></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/src/password-recovery.js"></script>
   <script type="module" src="/src/app.js"></script>
 </body>
 </html>
