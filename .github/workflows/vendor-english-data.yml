@@ -1,0 +1,50 @@
+name: vendor english data
+
+on:
+  push:
+    branches:
+      - feature/english-core-v2
+    paths:
+      - scripts/sync-english-data.mjs
+      - src/english/catalog.js
+      - .github/workflows/vendor-english-data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Generate pinned vocabulary snapshot
+        run: node scripts/sync-english-data.mjs
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit generated snapshot
+        shell: bash
+        run: |
+          changes="$(git status --porcelain -- public/data/english/netem-v1.json public/data/english/netem-v1.meta.json)"
+          if [ -z "$changes" ]; then
+            echo "Vocabulary snapshot already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/english/netem-v1.json public/data/english/netem-v1.meta.json
+          git commit -m "data(english): vendor pinned NETEM snapshot"
+          git push origin HEAD:${GITHUB_REF_NAME}
