@@ -48,10 +48,19 @@ export function createMcpHandler({supabaseUrl,publishableKey,resource,website,ca
   const server=new McpServer({name:'Wenyan',version:'0.1.0'});
   let snapshot;
   for(const name of TOOL_NAMES)server.registerTool(name,{description:descriptions[name],inputSchema:schemas[name],annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},_meta:{securitySchemes:[{type:'oauth2',scopes:['openid']}] }},async args=>{
-   try{snapshot??=await readCommittedSnapshot(pull);const data=learningTool(name,args,snapshot,catalog);return {content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};
+   try{snapshot??=await readCommittedSnapshot(pull);const data=learningTool(name,args,snapshot,catalog);return {content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data};}
    catch{return {isError:true,content:[{type:'text',text:'Committed learning data is unavailable. Do not infer history or mastery.'}]};}
   });
   const transport=new WebStandardStreamableHTTPServerTransport({sessionIdGenerator:undefined,enableJsonResponse:true});
   try{await server.connect(transport);const response=await transport.handleRequest(request,{parsedBody:body});response.headers.set('Cache-Control','no-store');return response;}finally{await server.close();}
  };
+}
+
+export function normalizeSupabaseRequest(request,supabaseUrl,functionName){
+ const incoming=new URL(request.url),publicUrl=new URL(supabaseUrl);
+ const internalPath='/'+functionName;
+ if(incoming.host!==publicUrl.host||!['http:','https:'].includes(incoming.protocol))return request;
+ if(incoming.pathname!==internalPath&&!incoming.pathname.startsWith(internalPath+'/'))return request;
+ const canonical=new URL('/functions/v1'+incoming.pathname,publicUrl);canonical.search=incoming.search;
+ return new Request(canonical,request);
 }
