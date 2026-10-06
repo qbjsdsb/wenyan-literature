@@ -29,7 +29,7 @@ let lexiconPayload = null;
 let activeLayer = readLayer();
 
 export const vocabularyMeta = {
-  status: 'sample',
+  status: 'loading',
   active: words.length,
   total: words.length,
   source: '内置样本',
@@ -80,11 +80,14 @@ function activate(nextCatalog, { bundled = false, source = 'NETEMVocabulary' } =
   if (!isCompleteCatalog(nextCatalog)) return false;
   catalog = nextCatalog;
   const enriched = lexiconPayload ? applyLexiconEnrichment(catalog, lexiconPayload) : catalog;
-  const active = selectActiveCatalog(enriched, seedWords, activeLayer).map(withRuntimeFields);
+  const baseActive = selectActiveCatalog(enriched, seedWords, activeLayer);
+  const pendingIds = globalThis.__wenyanActiveEnglishSessionIds?.() ?? [];
+  const active = selectActiveCatalog(enriched, seedWords, activeLayer, pendingIds).map(withRuntimeFields);
   words.splice(0, words.length, ...active);
   Object.assign(vocabularyMeta, {
     status: 'ready',
-    active: active.length,
+    active: baseActive.length,
+    carryover: Math.max(0, active.length - baseActive.length),
     total: catalog.length,
     source,
     sourceCommit: NETEM_SOURCE_COMMIT,
@@ -154,7 +157,7 @@ function decorateEnglishPage() {
 
   if (badge) {
     badge.textContent = vocabularyMeta.status === 'ready'
-      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词`
+      ? `${ENGLISH_LAYERS[activeLayer].label}学习集 · ${vocabularyMeta.active}词 / 唯一词${vocabularyMeta.total}词${vocabularyMeta.carryover?` · 续学保留${vocabularyMeta.carryover}词`:''}`
       : `基础样本 · ${words.length}词`;
   }
 
@@ -197,10 +200,11 @@ document.addEventListener('change', event => {
 });
 
 window.addEventListener('wenyan-vocabulary-loaded', () => {
-  if (location.hash === '#english') window.dispatchEvent(new Event('hashchange'));
+  if (['#english','#train'].includes(location.hash)) window.dispatchEvent(new Event('hashchange'));
   else decorateEnglishPage();
 });
 
+window.__wenyanVocabularyMeta = { ...vocabularyMeta };
 decorateEnglishPage();
 Promise.all([loadCatalog(), loadLexicon()])
   .then(([result, lexicon]) => {
@@ -209,5 +213,6 @@ Promise.all([loadCatalog(), loadLexicon()])
   })
   .catch(() => {
     vocabularyMeta.status = 'sample';
-    decorateEnglishPage();
+    window.__wenyanVocabularyMeta = { ...vocabularyMeta };
+    window.dispatchEvent(new CustomEvent('wenyan-vocabulary-loaded', { detail: { ...vocabularyMeta } }));
   });
