@@ -15,6 +15,7 @@ export default defineConfig(({mode})=>{
   },
   build: {
     outDir: 'dist',
-    manifest: true
+    manifest: true,
+    rollupOptions: {input: {app:'index.html',cloudValidation:'tests/hosted-sync.html'}}
   }
 };});
