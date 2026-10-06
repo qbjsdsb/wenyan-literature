@@ -140,17 +140,15 @@ AI 不是知识来源，只能帮助整理、压缩、关联和表达。
 
 ## 8. 数据原则
 
-内容数据和个人学习状态分开。
+内容与个人状态分离。学习动作本机即时持久保存，JSON导入/导出长期保留；无法读取/保存时不得静默清空或推进学习。
 
-个人状态：
-- 本地优先。
-- 每次操作先写本地。
-- JSON 导入 / 导出必须长期保留。
-- 不因为重构静默清空或重写已有记录。
+2026-10-07用户明确下一阶段需要长期云端事实、多电脑同步和ChatGPT集成，并确认尚无正式学习历史。旧“同步仅真实需求后可选”路线已被替代，详见ROADMAP；schema 2/localStorage键不是永久协议。
 
-当前不把云同步当作 P0。只有出现真实的多电脑切换需求后，再做单人薄同步；不要预建账号系统。
+当前运行代码仍为v2；本轮研究不改协议。实施云基础前重新检查是否已经开始积累真实数据，若有则备份迁移。新协议分事实/checkpoint/投影/静态内容，保留word ID、Smart首次结果/hinted、FSRS与备份，不长期双写旧协议。
 
-稳定数据边界见 `docs/ARCHITECTURE.md`。涉及 `wenyan-events-v2`、稳定 ID、备份、FSRS 历史、未完成 session 的改动，默认视为高风险。
+不把AI判断写成review，不让AI直接改card/due/算法或删除历史。MCP首版只读，RLS/RPC与client权限也必须只读，不用管理员key绕过。Auth使用单一owner，不建设商业注册/用户中心。
+
+Git只保存工程/静态内容/假数据，真实学习历史、secret、云备份进入私密数据边界。稳定职责见ARCHITECTURE，研究来源和Auth未知门槛见research/CLOUD-MCP.md。
 
 ## 9. 测试原则
 
@@ -175,19 +173,11 @@ AI 不是知识来源，只能帮助整理、压缩、关联和表达。
 
 ### 当前基线策略
 
-旧 PR #2—#10 是历史 stacked PR，保留追溯价值，但**不再继续往这条链上叠新开发**。
+main已合入Desktop English Baseline v1；接手核对实时head，旧PR #2—#10不再作为开发父链。#1文学审计冻结。
 
-当前 main 候选基线：
+English Experience v2/Smart Session在独立Draft #12；云端/MCP研究在独立Draft #13（chore/cloud-mcp-architecture，基于main）。不要覆盖或自动合并任一PR。#12已验证的领域逻辑应复用，但不能描述成main已实现。
 
-`integration/desktop-english-baseline-v1`
-
-后续应：
-1. 在该整合基线上完成桌面真实验收。
-2. 只修 P0 / P1。
-3. 测试和构建绿灯。
-4. 再决定是否合入 `main`。
-
-不要机械地重新从 PR #2 开始续接。
+每完成有意义的小阶段提交到远端，保持Draft PR body真实：已完成、当前状态、验证、未完成、blocker、next action。Work临时目录不是恢复点。状态只改docs/开发进度.md，不另建handoff/final/最新进度文件。
 
 ### 默认分支规则
 - 小步提交。
