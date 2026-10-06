@@ -61,3 +61,11 @@ npm run build
 - [0001 unindexed FK](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys)：config 是强约束 singleton，仅一行，当前不为此增加索引。
 
 `tests/cloud-hosted-denial.mjs` 经独立 GitHub CI 对真实 hosted REST API 检查 anon RPC、private schema、public table 绕过和无效签名 JWT；另读取 Auth 公共 settings，断言禁用 signup/anonymous、Email provider 开启且 public email confirm 保留。字段依据 [Supabase Auth 官方实现](https://github.com/supabase/auth/blob/master/internal/api/settings.go)，避免把本地 CLI 配置当托管状态。只用 public key，不创建假用户、不写学习事实。它不证明 owner 登录、真实第二用户、refresh/revoke 或 MCP client 成功。
+
+## 托管验收与独立备份
+
+`tests/hosted-sync.html` 是明确手动启动的验收入口，使用现有 SDK 会话，在两份隔离 IDB 上暂时改变新词目标并用 CAS 恢复。它验证真实 RPC/收据/重试/续签/表绕过，不生成 review，也不冒充第二个 Auth session。
+
+`scripts/export-cloud-backup.sql` 在一份 PostgreSQL 快照内导出 schema 3、事实、checkpoint、设置及可恢复水位/收据/fork；不读取 Auth 或导出 secret。结果只保存本人私密文件。可先关闭云连接、在干净浏览器导入 schema 3、核对事实与续学，再由受信管理面初始化新云身份和云协议。不直接向仍在线项目回滚旧表。
+
+当前独立每日任务利用已授权管理连接器生成私密文件，依赖这些连接器持续有效；未来运行与整库灾难恢复仍须验证。不要将任务创建成功描述为多年无人维护保证。

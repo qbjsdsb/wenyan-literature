@@ -2,10 +2,18 @@ import {newId,mergeEvents,validEvent,flagHeads} from '../core.js';
 import {PROTOCOL,CONTENT_VERSION,SCHEDULER_VERSION,assertSame,validateFacts,validateCheckpoint,checkpointEvent,validateSetting} from './protocol.js';
 const stores=['facts','checkpoints','outbox','meta','snapshots','conflicts'];
 const request=req=>new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
-export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
+export async function openLocalDB(name,indexedDB=globalThis.indexedDB,clock={wall:()=>Date.now(),monotonic:()=>performance.now()}){
  if(!indexedDB)throw Error('INDEXEDDB_UNAVAILABLE');
  const req=indexedDB.open(name,1);req.onupgradeneeded=()=>{for(const s of stores)req.result.createObjectStore(s,{keyPath:s==='meta'?'key':'id'});};
  const db=await request(req);db.onversionchange=()=>db.close();
+ let wallAnchor=clock.wall(),monoAnchor=clock.monotonic(),clockIssue=false;
+ const safeNow=()=>{const wall=clock.wall();if(clockIssue||Math.abs(wall-wallAnchor-(clock.monotonic()-monoAnchor))>300000)throw Error('CLOCK_OUT_OF_RANGE');return wall;};
+ async function observeServerClock(asOf){
+  if(!asOf)return;const serverAt=Date.parse(asOf);if(!Number.isFinite(serverAt))throw Error('INVALID_SERVER_TIME');
+  const wall=clock.wall();clockIssue=Math.abs(wall-serverAt)>300000;
+  if(!clockIssue){wallAnchor=wall;monoAnchor=clock.monotonic();}
+  if(clockIssue)throw Error('CLOCK_OUT_OF_RANGE');
+ }
  async function transaction(names,mode,fn){
   const tx=db.transaction(names,mode);const done=new Promise((res,rej)=>{tx.oncomplete=res;tx.onabort=()=>rej(tx.error||Error('TRANSACTION_ABORTED'));tx.onerror=()=>{};});
   // Attach rejection now; abort can fire before the callback resumes.
@@ -17,9 +25,10 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   const facts=(await request(s('facts').getAll())).map(r=>r.event),checkpoints=await request(s('checkpoints').getAll());
   validateFacts(facts);for(const cp of checkpoints)validateCheckpoint(cp.key,cp.value);
   const selected=new Map();for(const cp of checkpoints){const prior=selected.get(cp.key);if(!prior||cp.at>prior.at||cp.at===prior.at&&cp.id>prior.id)selected.set(cp.key,cp);}
-  return {facts:mergeEvents(facts),checkpoints,events:mergeEvents(facts,[...selected.values()].map(checkpointEvent)),outbox:await request(s('outbox').getAll()),settings:await getMeta(s,'settings')||{},owner:await getMeta(s,'owner'),cursor:await getMeta(s,'cursor')||0,conflicts:await request(s('conflicts').getAll())};
+  return {facts:mergeEvents(facts),checkpoints,events:mergeEvents(facts,[...selected.values()].map(checkpointEvent)),outbox:await request(s('outbox').getAll()),settings:await getMeta(s,'settings')||{},owner:await getMeta(s,'owner'),cursor:await getMeta(s,'cursor')||0,conflicts:await request(s('conflicts').getAll()),clockIssue};
  });}
  async function commit({events=[],checkpoint,settings,expectedLocalRevision}={},fail=false){
+  const now=safeNow();
   validateFacts(events);if(checkpoint)validateCheckpoint(checkpoint.key,checkpoint.value);
   if(settings)for(const [k,v]of Object.entries(settings))if(!validateSetting(k,v))throw Error('INVALID_SETTING');
   return transaction(stores,'readwrite',async(s,tx)=>{
@@ -36,18 +45,18 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
    if(checkpoint){
     const old=await request(s('checkpoints').get(checkpoint.value.id));
     if(old&&expectedLocalRevision!==old.localRevision)throw Error('LOCAL_WRITER_CONFLICT');
-    const cp={id:checkpoint.value.id,key:checkpoint.key,value:structuredClone(checkpoint.value),at:Math.max(Date.now(),lastAt+1),writer:device,revision:old?.revision||0,localRevision:(old?.localRevision||0)+1,pending:op.id};
+    const cp={id:checkpoint.value.id,key:checkpoint.key,value:structuredClone(checkpoint.value),at:Math.max(now,lastAt+1),writer:device,revision:old?.revision||0,localRevision:(old?.localRevision||0)+1,pending:op.id};
     op.checkpoint={...cp,baseRevision:old?.revision||0,baseOperation:old?.pending||null};
     await request(s('checkpoints').put(cp));
    }
    if(settings){const old=await getMeta(s,'settings')||{};op.settings={};for(const [k,v]of Object.entries(settings)){const prev=old[k];op.settings[k]={value:v,baseRevision:prev?.revision||0,baseOperation:prev?.pending||null};old[k]={value:v,revision:prev?.revision||0,pending:op.id};}await putMeta(s,'settings',old);}
-   await putMeta(s,'ordinal',ordinal);await putMeta(s,'lastAt',Math.max(lastAt,Date.now()));
+   await putMeta(s,'ordinal',ordinal);await putMeta(s,'lastAt',Math.max(lastAt,now));
    if(op.events.length||checkpoint||settings)await request(s('outbox').add(op));
    if(fail)tx.abort();return op;
   });
  }
  async function makeEvent(kind,key,value,extra={}){return transaction(['meta','facts'],'readwrite',async s=>{
-  const device=await getMeta(s,'device')||newId(),ordinal=(await getMeta(s,'ordinal')||0)+1,rawAt=Date.now(),at=Math.max(rawAt,(await getMeta(s,'lastAt')||0)+1);
+  const device=await getMeta(s,'device')||newId(),ordinal=(await getMeta(s,'ordinal')||0)+1,rawAt=safeNow(),at=Math.max(rawAt,(await getMeta(s,'lastAt')||0)+1);
   await putMeta(s,'device',device);await putMeta(s,'ordinal',ordinal);await putMeta(s,'lastAt',at);
   const previous=['favorite','mastered'].includes(kind)?flagHeads((await request(s('facts').getAll())).map(r=>r.event),kind,key).map(e=>e.id):undefined;
   return {id:newId(),device,kind,key,value:structuredClone(value),at,rawAt,ordinal,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,...(previous?{previous}:{}),...extra,...(extra.attemptId?{attemptId:extra.attemptId+':'+device}:{})};
@@ -80,6 +89,7 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
  async function rawRecovery(){return transaction(stores,'readonly',async s=>{const rows={};for(const name of stores)rows[name]=await request(s(name).getAll());return rows;});}
  // A backup is one local transaction; the cloud still receives bounded operations.
  async function restore(events,settings={},fail=false){
+  safeNow();
   const facts=events.filter(e=>e.kind!=='session').sort((a,b)=>Number(a.kind==='undo')-Number(b.kind==='undo'));validateFacts(facts);
   const checkpoints=events.filter(e=>e.kind==='session').map(e=>({key:e.key,value:{...e.value,id:e.value.id||e.id}}));
   for(const cp of checkpoints)validateCheckpoint(cp.key,cp.value);
@@ -95,6 +105,7 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   });
  }
  async function resolveConflict(id,choice){
+  safeNow();
   if(!['cloud','local'].includes(choice))throw Error('INVALID_CHOICE');
   return transaction(stores,'readwrite',async s=>{
    const conflict=await request(s('conflicts').get(id));if(!conflict)throw Error('MISSING_CONFLICT');
@@ -128,5 +139,5 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   await putMeta(s,'cursor',page.nextCursor);await putMeta(s,'watermark',page.watermark);
  });}
  async function snapshot(){const state=await read();return transaction(['snapshots'],'readwrite',async s=>{const all=await request(s('snapshots').getAll());const row={id:Date.now().toString(),schema:3,events:state.events,settings:state.settings,exportedAt:new Date().toISOString()};await request(s('snapshots').put(row));for(const old of all.sort((a,b)=>b.id.localeCompare(a.id)).slice(4))await request(s('snapshots').delete(old.id));return row;});}
- return {db,read,commit,makeEvent,migrate,bindOwner,prepareSettings,rawRecovery,restore,resolveConflict,acknowledge,receive,snapshot,transaction,close:()=>db.close()};
+ return {db,read,commit,makeEvent,migrate,bindOwner,prepareSettings,rawRecovery,restore,resolveConflict,acknowledge,receive,snapshot,observeServerClock,transaction,close:()=>db.close()};
 }
