@@ -2,6 +2,11 @@
   "schema": 1,
   "generatedFrom": "https://raw.githubusercontent.com/exam-data/NETEMVocabulary/bf83111e0ebf29c6f9aca45d2a4f30e2c72af2e7/netem_full_list.json",
   "sourceCommit": "bf83111e0ebf29c6f9aca45d2a4f30e2c72af2e7",
-  "count": 5528,
-  "sha256": "9ae5eec79dd3168926b69e09c5bff429fa276f49a6e43b563c69206ee1ca3c0d"
+  "sourceCount": 5530,
+  "uniqueCount": 5528,
+  "duplicateIds": [
+    "march",
+    "may"
+  ],
+  "sha256": "f27f6acd971a53901f741b8adc44524c1e2a0994fd07fc2b92d407a97ba741e6"
 }
