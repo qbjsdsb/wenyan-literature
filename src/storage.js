@@ -31,11 +31,8 @@ export function record(kind,key,value){return write(async()=>{
  }
  const event=await createEvent(kind,key,value);await database.commit({events:[event]});return event;
 });}
-export function save(events=store.events){return write(async()=>{
- const facts=events.filter(e=>e.kind!=='session');const known=new Set(store.facts.map(e=>e.id));
- const newFacts=facts.filter(e=>!known.has(e.id));for(let i=0;i<newFacts.length;i+=50)await database.commit({events:newFacts.slice(i,i+50)});
- for(const e of events.filter(e=>e.kind==='session')){const value={...e.value,id:e.value.id||e.id};const prior=store.checkpoints.find(c=>c.id===value.id);if(!prior||JSON.stringify(prior.value)!==JSON.stringify(value))await database.commit({checkpoint:{key:e.key,value},expectedLocalRevision:prior?.localRevision});}
- return true;
-});}
+export function save(events=store.events,settings={}){return write(async()=>{await database.restore(events,settings);return true;});}
+export function resolveConflict(id,choice){return write(()=>database.resolveConflict(id,choice));}
+export async function recoverySnapshots(){await ready;return database.transaction(['snapshots'],'readonly',s=>new Promise((res,rej)=>{const r=s('snapshots').getAll();r.onsuccess=()=>res(r.result.sort((a,b)=>b.id.localeCompare(a.id)));r.onerror=()=>rej(r.error);}));}
 export function setLearningSetting(field,value){return write(()=>database.commit({settings:{[field]:value}}));}
 export async function localSnapshot(){await ready;return database.snapshot();}

@@ -6,7 +6,7 @@
 
 `src/cloud/local-db.js` 使用原生 IndexedDB。facts/checkpoints/outbox/meta/snapshots/conflicts 同库事务；网页缓存是可重建投影。完成一步与 Undo 的事实和 checkpoint 在同一事务写入，成功后才推进 UI。提示/首次结果也先持久保存。Quota/事务失败停止该步，不把待写内存记录当已保存。
 
-v2 localStorage 只作一次迁移源，原值保留。session 历史提取到 checkpoint，不继续长期追加整组快照。JSON schema 3 可导出事实和续学组；旧 schema 2 导入仍支持。时间、ID、首次结果、FSRS 固定 5.2.3/epoch-1 不改写；历史缺失字段保持 unknown。
+v2 localStorage 只作一次迁移源，原值保留。session 历史提取到 checkpoint，不继续长期追加整组快照。JSON schema 3 可导出事实、学习设置和续学组；整份导入同一事务，云 outbox 仍拆至每批最多 50 事实。已有同 ID checkpoint 保留当前进度，不用旧备份回滚已完成历史；旧 schema 2 导入仍支持。时间、ID、首次结果、FSRS 固定 5.2.3/epoch-1 不改写；历史缺失字段保持 unknown。
 
 多标签使用 IDB revision CAS，而 BroadcastChannel 只通知，不能作锁。后台云同步不会等待网络才显示下一词。断网重开由构建生成的版本化 Service Worker 缓存静态 shell/词库/字体；不缓存 token/Auth/API；不在运行组内强制激活新版。
 
@@ -18,7 +18,7 @@ v2 localStorage 只作一次迁移源，原值保留。session 历史提取到 c
 
 owner 设置行短锁序列化 mutation/pull；事实 seq 是已提交顺序，不按客户端时间或 PostgreSQL sequence 最大值推水位。pull 固定 H、分页后在 IDB 原子落盘才推进 cursor。
 
-operation UUID 与完整 JSONB 收据持久保存，同 ID 不同内容拒绝。checkpoint CAS 使用 baseRevision/baseOperation，丢 ack 的因果后续提交可查询旧收据；旧写者保留 session_forks，事实仍接受。设置逐字段 CAS。同步不是全包 JSON 最后写入胜出。
+operation UUID 与完整 JSONB 收据持久保存，同 ID 不同内容拒绝。checkpoint CAS 使用 baseRevision/baseOperation，丢 ack 的因果后续提交可查询旧收据；旧写者保留 session_forks，事实仍接受。设置逐字段 CAS。本机明确选择继续云端 checkpoint 或把当前进度另存为新 session；不会替换任何 review。并发 mastered 保守保留复习，并发收藏保留可见性，下一次明确操作观察两条分支后解决。同步不是全包 JSON 最后写入胜出。
 
 ## 可复现验证
 
@@ -38,6 +38,6 @@ npm run build
 
 `.env.example` 只有 URL 和 publishable key。运行时密码直接送 Supabase Auth；token 只由 SDK 处理，不进入 JSON/日志/Git。绑定 owner 前先验证云 RPC授权，其他账号不能接管本机学习历史。
 
-本机保留五份轮转快照，并有 JSON 人工备份。私密异地自动备份、托管恢复演练及真正固定 HTTPS 入口仍须在部署阶段完成，不能声称同步等于备份。
+本机保留五份轮转快照，设置里可查看与合并恢复点，并有 JSON 人工备份。私密异地自动备份、托管恢复演练及真正固定 HTTPS 入口仍须在部署阶段完成，不能声称同步等于备份。
 
 回滚原则：不退回只写 localStorage 的旧构建。代码回滚须继续支持 v3 数据读取；停云后本机可学。迁移初始 config.owner_id=null，默认全拒绝，只有由管理面绑定本人的 Auth UUID 才可写。

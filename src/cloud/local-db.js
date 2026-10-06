@@ -1,4 +1,4 @@
-import {newId,mergeEvents,validEvent} from '../core.js';
+import {newId,mergeEvents,validEvent,flagHeads} from '../core.js';
 import {PROTOCOL,CONTENT_VERSION,SCHEDULER_VERSION,assertSame,validateFacts,validateCheckpoint,checkpointEvent,validateSetting} from './protocol.js';
 const stores=['facts','checkpoints','outbox','meta','snapshots','conflicts'];
 const request=req=>new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
@@ -15,6 +15,7 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
  const putMeta=(s,key,value)=>request(s('meta').put({key,value}));
  async function read(){return transaction(stores,'readonly',async s=>{
   const facts=(await request(s('facts').getAll())).map(r=>r.event),checkpoints=await request(s('checkpoints').getAll());
+  validateFacts(facts);for(const cp of checkpoints)validateCheckpoint(cp.key,cp.value);
   const selected=new Map();for(const cp of checkpoints){const prior=selected.get(cp.key);if(!prior||cp.at>prior.at||cp.at===prior.at&&cp.id>prior.id)selected.set(cp.key,cp);}
   return {facts:mergeEvents(facts),checkpoints,events:mergeEvents(facts,[...selected.values()].map(checkpointEvent)),outbox:await request(s('outbox').getAll()),settings:await getMeta(s,'settings')||{},owner:await getMeta(s,'owner'),cursor:await getMeta(s,'cursor')||0,conflicts:await request(s('conflicts').getAll())};
  });}
@@ -27,9 +28,9 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
    const order=(await getMeta(s,'operationOrder')||0)+1;await putMeta(s,'operationOrder',order);
    const op={id:newId(),v:PROTOCOL,events:[],createdAt:Date.now(),order};
    for(const original of events){
-    const prior=await request(s('facts').get(original.id));if(prior){assertSame(prior.event,original);continue;}
+    const prior=await request(s('facts').get(original.id));if(prior){assertSame(prior.event,original.version?original:{...original,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,imported:true});continue;}
     // Imports keep original time and identity; missing observations remain unknown.
-    const event=original.version?original:{...original,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION};
+    const event=original.version?original:{...original,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,imported:true};
     await request(s('facts').add({id:event.id,event,seq:null}));op.events.push(event);
    }
    if(checkpoint){
@@ -45,10 +46,11 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
    if(fail)tx.abort();return op;
   });
  }
- async function makeEvent(kind,key,value,extra={}){return transaction(['meta'],'readwrite',async s=>{
+ async function makeEvent(kind,key,value,extra={}){return transaction(['meta','facts'],'readwrite',async s=>{
   const device=await getMeta(s,'device')||newId(),ordinal=(await getMeta(s,'ordinal')||0)+1,rawAt=Date.now(),at=Math.max(rawAt,(await getMeta(s,'lastAt')||0)+1);
   await putMeta(s,'device',device);await putMeta(s,'ordinal',ordinal);await putMeta(s,'lastAt',at);
-  return {id:newId(),device,kind,key,value:structuredClone(value),at,rawAt,ordinal,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,...extra};
+  const previous=['favorite','mastered'].includes(kind)?flagHeads((await request(s('facts').getAll())).map(r=>r.event),kind,key).map(e=>e.id):undefined;
+  return {id:newId(),device,kind,key,value:structuredClone(value),at,rawAt,ordinal,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,...(previous?{previous}:{}),...extra};
  });}
  async function migrate(legacy,preferences={}){
   if(!Array.isArray(legacy)||legacy.some(e=>!validEvent(e)))throw Error('INVALID_LEGACY');
@@ -66,21 +68,53 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   });
  }
  async function bindOwner(owner){return transaction(['meta'],'readwrite',async s=>{const old=await getMeta(s,'owner');if(old&&old!==owner)throw Error('ACCOUNT_MISMATCH');await putMeta(s,'owner',owner);});}
+ // A backup is one local transaction; the cloud still receives bounded operations.
+ async function restore(events,settings={},fail=false){
+  const facts=events.filter(e=>e.kind!=='session');validateFacts(facts);
+  const checkpoints=events.filter(e=>e.kind==='session').map(e=>({key:e.key,value:{...e.value,id:e.value.id||e.id}}));
+  for(const cp of checkpoints)validateCheckpoint(cp.key,cp.value);
+  const values={};for(const[k,row]of Object.entries(settings)){const value=row&&typeof row==='object'&&Object.hasOwn(row,'value')?row.value:row;if(!validateSetting(k,value))throw Error('INVALID_SETTING');values[k]=value;}
+  return transaction(stores,'readwrite',async(s,tx)=>{
+   let order=await getMeta(s,'operationOrder')||0;const fresh=[];
+   for(const original of facts){const event=original.version?original:{...original,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,imported:true},old=await request(s('facts').get(event.id));if(old)assertSame(old.event,event);else{fresh.push(event);await request(s('facts').add({id:event.id,event,seq:null}));}}
+   for(let i=0;i<fresh.length;i+=50)await request(s('outbox').add({id:newId(),v:3,order:++order,events:fresh.slice(i,i+50),createdAt:Date.now()}));
+   let at=await getMeta(s,'lastAt')||0;
+   for(const cp of checkpoints){const old=await request(s('checkpoints').get(cp.value.id));if(old){if(old.key!==cp.key)throw Error('ID_CONTENT_CONFLICT');continue;}const op={id:newId(),v:3,events:[],order:++order,createdAt:Date.now()},row={id:cp.value.id,...cp,at:Math.max(Date.now(),at+1),writer:'backup',revision:0,localRevision:1,pending:op.id};at=row.at;op.checkpoint={...row,baseRevision:0,baseOperation:null};await request(s('checkpoints').add(row));await request(s('outbox').add(op));}
+   if(Object.keys(values).length){const current=await getMeta(s,'settings')||{},op={id:newId(),v:3,events:[],order:++order,createdAt:Date.now(),settings:{}};for(const[k,value]of Object.entries(values)){const old=current[k];op.settings[k]={value,baseRevision:old?.revision||0,baseOperation:old?.pending||null};current[k]={value,revision:old?.revision||0,pending:op.id};}await putMeta(s,'settings',current);await request(s('outbox').add(op));}
+   await putMeta(s,'operationOrder',order);await putMeta(s,'lastAt',at);if(fail)tx.abort();
+  });
+ }
+ async function resolveConflict(id,choice){
+  if(!['cloud','local'].includes(choice))throw Error('INVALID_CHOICE');
+  return transaction(stores,'readwrite',async s=>{
+   const conflict=await request(s('conflicts').get(id));if(!conflict)throw Error('MISSING_CONFLICT');
+   const op={id:newId(),v:3,events:[],order:(await getMeta(s,'operationOrder')||0)+1,createdAt:Date.now()};
+   if(conflict.type==='checkpoint'){
+    const old=await request(s('checkpoints').get(conflict.proposal.id));if(!old||old.pending!==conflict.id)throw Error('CONFLICT_HAS_NEWER_LOCAL_CHANGES');
+    if(choice==='cloud'){if(!conflict.remote)throw Error('CLOUD_CHECKPOINT_NOT_RECEIVED');validateCheckpoint(conflict.remote.key,conflict.remote.value);await request(s('checkpoints').put({...conflict.remote,localRevision:old.localRevision+1,pending:null}));}
+    else{const fork={...old,id:newId(),value:{...old.value},at:Math.max(Date.now(),old.at+1),revision:0,localRevision:1,pending:op.id};fork.value.id=fork.id;op.checkpoint={...fork,baseRevision:0,baseOperation:null};await request(s('checkpoints').delete(old.id));await request(s('checkpoints').add(fork));}
+   }else{
+    const current=await getMeta(s,'settings')||{},field=conflict.field,old=current[field];if(old?.pending!==conflict.operationId)throw Error('CONFLICT_HAS_NEWER_LOCAL_CHANGES');
+    if(choice==='cloud')current[field]=conflict.cloud.current;else{op.settings={[field]:{value:old.value,baseRevision:conflict.cloud.current?.revision||0,baseOperation:null}};current[field]={value:old.value,revision:conflict.cloud.current?.revision||0,pending:op.id};}await putMeta(s,'settings',current);
+   }
+   for(const row of await request(s('conflicts').getAll()))if(conflict.type===row.type&&(row.type==='checkpoint'?row.proposal.id===conflict.proposal.id:row.field===conflict.field))await request(s('conflicts').delete(row.id));if(op.checkpoint||op.settings){await request(s('outbox').add(op));await putMeta(s,'operationOrder',op.order);}return choice;
+  });
+ }
  async function acknowledge(op,receipt){return transaction(stores,'readwrite',async s=>{
   if(!await request(s('outbox').get(op.id)))return;
   if(receipt.operationId!==op.id||receipt.v!==3)throw Error('INVALID_RECEIPT');
   for(const e of op.events){const row=await request(s('facts').get(e.id));if(row){row.seq=receipt.eventSeqs[e.id];if(!Number.isSafeInteger(row.seq))throw Error('INVALID_RECEIPT');await request(s('facts').put(row));}}
   if(op.checkpoint){const cp=await request(s('checkpoints').get(op.checkpoint.id));if(receipt.checkpoint?.conflict){await request(s('conflicts').put({id:op.id,type:'checkpoint',proposal:op.checkpoint,cloud:receipt.checkpoint}));}else if(cp){cp.revision=receipt.checkpoint.revision;if(cp.pending===op.id)cp.pending=null;await request(s('checkpoints').put(cp));}}
-  if(op.settings){const current=await getMeta(s,'settings')||{};for(const k of Object.keys(op.settings)){const result=receipt.settings[k];if(result.conflict)await request(s('conflicts').put({id:op.id+'-'+k,type:'setting',field:k,proposal:op.settings[k],cloud:result}));else{current[k].revision=result.revision;if(current[k].pending===op.id)current[k].pending=null;}}await putMeta(s,'settings',current);}
+  if(op.settings){const current=await getMeta(s,'settings')||{};for(const k of Object.keys(op.settings)){const result=receipt.settings[k];if(result.conflict)await request(s('conflicts').put({id:op.id+'-'+k,operationId:op.id,type:'setting',field:k,proposal:op.settings[k],cloud:result}));else{current[k].revision=result.revision;if(current[k].pending===op.id)current[k].pending=null;}}await putMeta(s,'settings',current);}
   await request(s('outbox').delete(op.id));
  });}
  async function receive(page){return transaction(stores,'readwrite',async s=>{
   const cursor=await getMeta(s,'cursor')||0;if(!Number.isSafeInteger(page.watermark)||page.watermark<cursor||!Number.isSafeInteger(page.nextCursor)||page.nextCursor<cursor||page.nextCursor>page.watermark)throw Error('INVALID_PAGE');
   for(const row of page.events){if(row.seq<=cursor||row.seq>page.nextCursor||!validEvent(row.event))throw Error('INVALID_PAGE');const old=await request(s('facts').get(row.event.id));if(old)assertSame(old.event,row.event);await request(s('facts').put({id:row.event.id,event:row.event,seq:row.seq}));}
-  for(const cp of page.checkpoints||[]){validateCheckpoint(cp.key,cp.value);const old=await request(s('checkpoints').get(cp.id));if(!old?.pending&&(!old||cp.revision>old.revision))await request(s('checkpoints').put({...cp,localRevision:(old?.localRevision||0)+1,pending:null}));}
+  for(const cp of page.checkpoints||[]){validateCheckpoint(cp.key,cp.value);const old=await request(s('checkpoints').get(cp.id));if(old?.pending)for(const row of await request(s('conflicts').getAll()))if(row.type==='checkpoint'&&row.proposal.id===cp.id){row.remote=cp;await request(s('conflicts').put(row));}if(!old?.pending&&(!old||cp.revision>old.revision))await request(s('checkpoints').put({...cp,localRevision:(old?.localRevision||0)+1,pending:null}));}
   const settings=await getMeta(s,'settings')||{};for(const[k,v]of Object.entries(page.settings||{}))if(!settings[k]?.pending)settings[k]=v;await putMeta(s,'settings',settings);
   await putMeta(s,'cursor',page.nextCursor);await putMeta(s,'watermark',page.watermark);
  });}
  async function snapshot(){const state=await read();return transaction(['snapshots'],'readwrite',async s=>{const all=await request(s('snapshots').getAll());const row={id:Date.now().toString(),schema:3,events:state.events,settings:state.settings,exportedAt:new Date().toISOString()};await request(s('snapshots').put(row));for(const old of all.sort((a,b)=>b.id.localeCompare(a.id)).slice(4))await request(s('snapshots').delete(old.id));return row;});}
- return {db,read,commit,makeEvent,migrate,bindOwner,acknowledge,receive,snapshot,transaction,close:()=>db.close()};
+ return {db,read,commit,makeEvent,migrate,bindOwner,restore,resolveConflict,acknowledge,receive,snapshot,transaction,close:()=>db.close()};
 }

@@ -101,6 +101,10 @@ begin
   if jsonb_typeof(v->'correct') is distinct from 'boolean' then raise exception 'INVALID_TYPING';end if;
  elsif k in ('favorite','mastered') then
   if jsonb_typeof(v->'on') is distinct from 'boolean' then raise exception 'INVALID_FLAG';end if;
+  if e ? 'previous' then
+   if jsonb_typeof(e->'previous') is distinct from 'array' or jsonb_array_length(e->'previous')>1000 then raise exception 'INVALID_FLAG_PREVIOUS';end if;
+   if exists(select 1 from jsonb_array_elements(e->'previous') p where jsonb_typeof(p) is distinct from 'string' or (p#>>'{}')!~'^[a-zA-Z0-9-]{8,80}$') then raise exception 'INVALID_FLAG_PREVIOUS';end if;
+  end if;
  elsif k='undo' then
   if coalesce(v->>'id','')!~'^[a-zA-Z0-9-]{8,80}$' then raise exception 'INVALID_UNDO';end if;
  elsif k='task' then
@@ -114,21 +118,38 @@ end $$;
 revoke all on function wenyan_private.assert_event(jsonb) from public,anon,authenticated;
 create function wenyan_private.assert_checkpoint(cp jsonb) returns void
 language plpgsql set search_path='' as $$
-declare v jsonb:=cp->'value'; q jsonb:=v->'queue'; n integer; i integer; r jsonb;
+declare v jsonb:=cp->'value'; q jsonb:=v->'queue'; n integer; i integer; r jsonb; steps text; seen jsonb:='{}'; word text; mark text; prior text;
 begin
  if jsonb_typeof(v) is distinct from 'object' or length(v::text)>8192 or cp->>'id' is distinct from v->>'id'
   or coalesce(cp->>'id','')!~'^[a-zA-Z0-9-]{8,80}$' or coalesce(cp->>'key','') not in ('english','literature')
   or jsonb_typeof(q) is distinct from 'array' or jsonb_typeof(v->'results') is distinct from 'array'
   or coalesce(v->>'index','')!~'^[0-9]{1,2}$' or length(coalesce(cp->>'writer','')) not between 1 and 80
+ or jsonb_typeof(cp->'at') is distinct from 'number' or coalesce(cp->>'baseRevision','0')!~'^[0-9]{1,16}$'
  then raise exception 'INVALID_CHECKPOINT';end if;
+ if (cp->>'at')::numeric<=0 or (cp->>'at')::numeric>extract(epoch from clock_timestamp())*1000+86400000 then raise exception 'CLOCK_OUT_OF_RANGE';end if;
  n:=jsonb_array_length(q);i:=(v->>'index')::integer;
  if n>50 or i>n or jsonb_array_length(v->'results')>n then raise exception 'INVALID_CHECKPOINT';end if;
  for r in select value from jsonb_array_elements(q) loop
   if jsonb_typeof(r)<>'string' or length(r#>>'{}')>=100 then raise exception 'INVALID_CHECKPOINT';end if;
  end loop;
  if cp->>'key'='english' and (v->>'mode' not in ('follow','recall','listen') or v->>'mode' is null) then raise exception 'INVALID_MODE';end if;
- if v ? 'smart' and (v->>'smart'<>'1' or v->>'mode'<>'recall' or coalesce(v->>'steps','')~'[^erx]' or length(v->>'steps')<>n) then raise exception 'INVALID_SMART';end if;
- if (v ? 'current') and jsonb_typeof(v->'current')<>'object' then raise exception 'INVALID_CURRENT';end if;
+ if v ? 'smart' then
+  if v->>'smart' is distinct from '1' or v->>'mode' is distinct from 'recall' or jsonb_typeof(v->'steps') is distinct from 'string' or v->>'steps'~'[^erx]' or length(v->>'steps')<>n then raise exception 'INVALID_SMART';end if;
+  steps:=v->>'steps';
+  for i in 0..n-1 loop
+   word:=q->>i;mark:=substr(steps,i+1,1);prior:=coalesce(seen->>word,'');
+   if position(mark in prior)>0 or (mark='e' and prior<>'') or (mark='x' and position('r' in prior)=0) then raise exception 'INVALID_SMART';end if;
+   seen:=seen||jsonb_build_object(word,prior||mark);
+  end loop;
+  if (select count(*) from jsonb_object_keys(seen))>24 or exists(select 1 from jsonb_each_text(seen) t where position('r' in t.value)=0) then raise exception 'INVALID_SMART';end if;
+ end if;
+ for r in select value from jsonb_array_elements(v->'results') loop
+  if jsonb_typeof(r) is distinct from 'object' or jsonb_typeof(r->'id') is distinct from 'string' or (r->'rating' is distinct from 'null'::jsonb and coalesce(r->>'rating','') not in ('1','3')) or (r ? 'firstCorrect' and jsonb_typeof(r->'firstCorrect')<>'boolean') or (r ? 'hinted' and jsonb_typeof(r->'hinted')<>'boolean') then raise exception 'INVALID_RESULT';end if;
+ end loop;
+ if cp->>'key'='literature' and jsonb_typeof(v->'article') is distinct from 'string' then raise exception 'INVALID_CHECKPOINT';end if;
+ if v ? 'current' then
+  if jsonb_typeof(v->'current') is distinct from 'object' or (v->'current' ? 'firstCorrect' and jsonb_typeof(v->'current'->'firstCorrect')<>'boolean') or (v->'current' ? 'hinted' and jsonb_typeof(v->'current'->'hinted')<>'boolean') or (v->'current' ? 'phase' and coalesce(v->'current'->>'phase','') not in ('input','correction','rating')) then raise exception 'INVALID_CURRENT';end if;
+ end if;
 end $$;
 revoke all on function wenyan_private.assert_checkpoint(jsonb) from public,anon,authenticated;
 create function public.wenyan_commit(p_op jsonb) returns jsonb
@@ -189,9 +210,9 @@ begin
   if jsonb_typeof(p_op->'settings')<>'object' or (select count(*) from jsonb_object_keys(p_op->'settings'))>3 then raise exception 'INVALID_SETTINGS';end if;
   for field,proposal in select * from jsonb_each(p_op->'settings') loop
    if field='newWordLimit' then
-    if proposal->>'value' not in ('6','12','24') then raise exception 'INVALID_SETTING';end if;
+    if jsonb_typeof(proposal->'value') is distinct from 'number' or coalesce(proposal->>'value','') not in ('6','12','24') then raise exception 'INVALID_SETTING';end if;
    elsif field='layer' then
-    if proposal->>'value' not in ('core','high','full') then raise exception 'INVALID_SETTING';end if;
+    if jsonb_typeof(proposal->'value') is distinct from 'string' or coalesce(proposal->>'value','') not in ('core','high','full') then raise exception 'INVALID_SETTING';end if;
    elsif field='timezone' then
     if not exists(select 1 from pg_timezone_names where name=proposal->>'value') then raise exception 'INVALID_TIMEZONE';end if;
    else raise exception 'UNKNOWN_SETTING';end if;
@@ -221,7 +242,7 @@ language plpgsql security definer set search_path='' as $$
 declare u uuid:=auth.uid(); state wenyan_private.learner_settings%rowtype; high bigint; next_cursor bigint; evs jsonb; cps jsonb;
 begin
  if not wenyan_private.authorized(false) then raise exception 'FORBIDDEN' using errcode='42501';end if;
- if p_cursor<0 or p_limit not between 1 and 500 then raise exception 'INVALID_PAGE';end if;
+ if p_cursor is null or p_cursor<0 or p_limit is null or p_limit not between 1 and 500 then raise exception 'INVALID_PAGE';end if;
  insert into wenyan_private.learner_settings(owner_id) values(u) on conflict do nothing;
  select * into state from wenyan_private.learner_settings where owner_id=u for update;
  high:=coalesce(p_high,state.watermark);

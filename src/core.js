@@ -28,7 +28,19 @@ export function activeEvents(events) {
   return events.filter(e=>e.kind!=='undo'&&!undone.has(e.id));
 }
 export function latest(events,kind,key) {
+  if(kind==='favorite'||kind==='mastered'){
+    const heads=flagHeads(events,kind,key);if(!heads.length)return undefined;
+    return {on:kind==='mastered'?heads.every(e=>e.value.on):heads.some(e=>e.value.on),conflict:new Set(heads.map(e=>e.value.on)).size>1};
+  }
   return activeEvents(events).filter(e=>e.kind===kind && e.key===key).at(-1)?.value;
+}
+// Only boolean learning flags carry observed predecessors. Concurrent mastery
+// keeps the word in review; concurrent bookmarks keep it visible. A later
+// explicit toggle observes both branches and resolves the choice.
+export function flagHeads(events,kind,key){
+  const list=activeEvents(events).filter(e=>e.kind===kind&&e.key===key).sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)),superseded=new Set();
+  let legacy;for(const e of list){if(Array.isArray(e.previous))for(const id of e.previous)superseded.add(id);else{if(legacy)superseded.add(legacy.id);legacy=e;}}
+  return list.filter(e=>!superseded.has(e.id));
 }
 export function reviewCard(events,key) {
   let card=createEmptyCard(new Date(0));
