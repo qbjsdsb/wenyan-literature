@@ -173,7 +173,7 @@ begin
   if saved.input<>p_op then raise exception 'OP_CONTENT_CONFLICT';end if;
   return saved.result;
  end if;
- for ev in select value from jsonb_array_elements(p_op->'events') loop
+ for ev in select value from jsonb_array_elements(p_op->'events') with ordinality as q(value,ordinal) order by case when value->>'kind'='undo' then 1 else 0 end,ordinal loop
   perform wenyan_private.assert_event(ev);
   select event into old from wenyan_private.study_events where owner_id=u and id=ev->>'id';
   if found then
@@ -190,10 +190,12 @@ begin
  if cp is not null and cp<>'null'::jsonb then
   perform wenyan_private.assert_checkpoint(cp);
   select * into ses from wenyan_private.study_sessions where owner_id=u and id=cp->>'id';
+  if found and ses.key is distinct from cp->>'key' then raise exception 'ID_CONTENT_CONFLICT';end if;
   base:=coalesce((cp->>'baseRevision')::bigint,0);
   if cp->>'baseOperation' is not null then
    select r.result->'checkpoint' into dependency from wenyan_private.sync_receipts r where owner_id=u and id=(cp->>'baseOperation')::uuid;
    if dependency is null then raise exception 'DEPENDENCY_MISSING';end if;
+   if dependency->>'id' is distinct from cp->>'id' then raise exception 'INVALID_CHECKPOINT_DEPENDENCY';end if;
    if dependency->>'conflict'='true' then base:=-1;else base:=(dependency->>'revision')::bigint;end if;
   end if;
   if base<>coalesce(ses.revision,0) then

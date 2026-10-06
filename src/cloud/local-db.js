@@ -50,12 +50,12 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   const device=await getMeta(s,'device')||newId(),ordinal=(await getMeta(s,'ordinal')||0)+1,rawAt=Date.now(),at=Math.max(rawAt,(await getMeta(s,'lastAt')||0)+1);
   await putMeta(s,'device',device);await putMeta(s,'ordinal',ordinal);await putMeta(s,'lastAt',at);
   const previous=['favorite','mastered'].includes(kind)?flagHeads((await request(s('facts').getAll())).map(r=>r.event),kind,key).map(e=>e.id):undefined;
-  return {id:newId(),device,kind,key,value:structuredClone(value),at,rawAt,ordinal,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,...(previous?{previous}:{}),...extra};
+  return {id:newId(),device,kind,key,value:structuredClone(value),at,rawAt,ordinal,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,...(previous?{previous}:{}),...extra,...(extra.attemptId?{attemptId:extra.attemptId+':'+device}:{})};
  });}
  async function migrate(legacy,preferences={}){
   if(!Array.isArray(legacy)||legacy.some(e=>!validEvent(e)))throw Error('INVALID_LEGACY');
   if(await transaction(['meta'],'readonly',s=>getMeta(s,'migrated')))return;
-  const facts=legacy.filter(e=>e.kind!=='session'),latest=new Map();
+  const facts=legacy.filter(e=>e.kind!=='session').sort((a,b)=>Number(a.kind==='undo')-Number(b.kind==='undo')),latest=new Map();validateFacts(facts);const targets=new Map(facts.map(e=>[e.id,e]));for(const e of facts)if(e.kind==='undo'&&(!targets.has(e.value.id)||targets.get(e.value.id).kind==='undo'||targets.get(e.value.id).key!==e.key))throw Error('INVALID_UNDO_REFERENCE');
   for(const e of mergeEvents(legacy))if(e.kind==='session')latest.set(e.key,{key:e.key,value:{...e.value,id:e.value.id||e.id}});
   // One transaction owns the import marker, source copy, facts, checkpoints, and outbox.
   return transaction(stores,'readwrite',async s=>{
@@ -68,14 +68,24 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   });
  }
  async function bindOwner(owner){return transaction(['meta'],'readwrite',async s=>{const old=await getMeta(s,'owner');if(old&&old!==owner)throw Error('ACCOUNT_MISMATCH');await putMeta(s,'owner',owner);});}
+ async function prepareSettings(remote){return transaction(['meta','outbox'],'readwrite',async s=>{
+  const current=await getMeta(s,'settings')||{},op={id:newId(),v:3,events:[],settings:{},order:(await getMeta(s,'operationOrder')||0)+1,createdAt:Date.now()};
+  for(const[k,old]of Object.entries(current)){
+   if(old.pending||old.revision>0)continue;
+   if(remote[k]){if(!validateSetting(k,remote[k].value)||!Number.isSafeInteger(remote[k].revision)||remote[k].revision<1)throw Error('INVALID_PAGE');current[k]=remote[k];}
+   else{op.settings[k]={value:old.value,baseRevision:0,baseOperation:null};current[k]={...old,pending:op.id};}
+  }
+  await putMeta(s,'settings',current);if(Object.keys(op.settings).length){await request(s('outbox').add(op));await putMeta(s,'operationOrder',op.order);}
+ });}
+ async function rawRecovery(){return transaction(stores,'readonly',async s=>{const rows={};for(const name of stores)rows[name]=await request(s(name).getAll());return rows;});}
  // A backup is one local transaction; the cloud still receives bounded operations.
  async function restore(events,settings={},fail=false){
-  const facts=events.filter(e=>e.kind!=='session');validateFacts(facts);
+  const facts=events.filter(e=>e.kind!=='session').sort((a,b)=>Number(a.kind==='undo')-Number(b.kind==='undo'));validateFacts(facts);
   const checkpoints=events.filter(e=>e.kind==='session').map(e=>({key:e.key,value:{...e.value,id:e.value.id||e.id}}));
   for(const cp of checkpoints)validateCheckpoint(cp.key,cp.value);
   const values={};for(const[k,row]of Object.entries(settings)){const value=row&&typeof row==='object'&&Object.hasOwn(row,'value')?row.value:row;if(!validateSetting(k,value))throw Error('INVALID_SETTING');values[k]=value;}
   return transaction(stores,'readwrite',async(s,tx)=>{
-   let order=await getMeta(s,'operationOrder')||0;const fresh=[];
+   let order=await getMeta(s,'operationOrder')||0;const fresh=[],targets=new Map([...(await request(s('facts').getAll())).map(r=>r.event),...facts].map(e=>[e.id,e]));for(const e of facts)if(e.kind==='undo'&&(!targets.has(e.value.id)||targets.get(e.value.id).kind==='undo'||targets.get(e.value.id).key!==e.key))throw Error('INVALID_UNDO_REFERENCE');
    for(const original of facts){const event=original.version?original:{...original,version:3,contentVersion:CONTENT_VERSION,schedulerVersion:SCHEDULER_VERSION,imported:true},old=await request(s('facts').get(event.id));if(old)assertSame(old.event,event);else{fresh.push(event);await request(s('facts').add({id:event.id,event,seq:null}));}}
    for(let i=0;i<fresh.length;i+=50)await request(s('outbox').add({id:newId(),v:3,order:++order,events:fresh.slice(i,i+50),createdAt:Date.now()}));
    let at=await getMeta(s,'lastAt')||0;
@@ -101,20 +111,22 @@ export async function openLocalDB(name,indexedDB=globalThis.indexedDB){
   });
  }
  async function acknowledge(op,receipt){return transaction(stores,'readwrite',async s=>{
-  if(!await request(s('outbox').get(op.id)))return;
+  const pending=await request(s('outbox').get(op.id));if(!pending)return;assertSame(pending,op);
   if(receipt.operationId!==op.id||receipt.v!==3)throw Error('INVALID_RECEIPT');
-  for(const e of op.events){const row=await request(s('facts').get(e.id));if(row){row.seq=receipt.eventSeqs[e.id];if(!Number.isSafeInteger(row.seq))throw Error('INVALID_RECEIPT');await request(s('facts').put(row));}}
+  if(op.checkpoint&&(!receipt.checkpoint||receipt.checkpoint.id!==op.checkpoint.id||typeof receipt.checkpoint.conflict!=='boolean'||!Number.isSafeInteger(receipt.checkpoint.revision)||receipt.checkpoint.revision<0))throw Error('INVALID_RECEIPT');
+  for(const e of op.events){const row=await request(s('facts').get(e.id));if(row){row.seq=receipt.eventSeqs[e.id];if(!Number.isSafeInteger(row.seq)||row.seq<1)throw Error('INVALID_RECEIPT');await request(s('facts').put(row));}}
   if(op.checkpoint){const cp=await request(s('checkpoints').get(op.checkpoint.id));if(receipt.checkpoint?.conflict){await request(s('conflicts').put({id:op.id,type:'checkpoint',proposal:op.checkpoint,cloud:receipt.checkpoint}));}else if(cp){cp.revision=receipt.checkpoint.revision;if(cp.pending===op.id)cp.pending=null;await request(s('checkpoints').put(cp));}}
   if(op.settings){const current=await getMeta(s,'settings')||{};for(const k of Object.keys(op.settings)){const result=receipt.settings[k];if(result.conflict)await request(s('conflicts').put({id:op.id+'-'+k,operationId:op.id,type:'setting',field:k,proposal:op.settings[k],cloud:result}));else{current[k].revision=result.revision;if(current[k].pending===op.id)current[k].pending=null;}}await putMeta(s,'settings',current);}
   await request(s('outbox').delete(op.id));
  });}
  async function receive(page){return transaction(stores,'readwrite',async s=>{
-  const cursor=await getMeta(s,'cursor')||0;if(!Number.isSafeInteger(page.watermark)||page.watermark<cursor||!Number.isSafeInteger(page.nextCursor)||page.nextCursor<cursor||page.nextCursor>page.watermark)throw Error('INVALID_PAGE');
+  const cursor=await getMeta(s,'cursor')||0;if(page.v!==3||!Array.isArray(page.events)||!Number.isSafeInteger(page.watermark)||page.watermark<cursor||!Number.isSafeInteger(page.nextCursor)||page.nextCursor<cursor||page.nextCursor>page.watermark)throw Error('INVALID_PAGE');
+  validateFacts(page.events.map(row=>row.event));if(page.events.length!==page.nextCursor-cursor||page.events.some((row,i)=>row.seq!==cursor+i+1))throw Error('INVALID_PAGE');
   for(const row of page.events){if(row.seq<=cursor||row.seq>page.nextCursor||!validEvent(row.event))throw Error('INVALID_PAGE');const old=await request(s('facts').get(row.event.id));if(old)assertSame(old.event,row.event);await request(s('facts').put({id:row.event.id,event:row.event,seq:row.seq}));}
-  for(const cp of page.checkpoints||[]){validateCheckpoint(cp.key,cp.value);const old=await request(s('checkpoints').get(cp.id));if(old?.pending)for(const row of await request(s('conflicts').getAll()))if(row.type==='checkpoint'&&row.proposal.id===cp.id){row.remote=cp;await request(s('conflicts').put(row));}if(!old?.pending&&(!old||cp.revision>old.revision))await request(s('checkpoints').put({...cp,localRevision:(old?.localRevision||0)+1,pending:null}));}
-  const settings=await getMeta(s,'settings')||{};for(const[k,v]of Object.entries(page.settings||{}))if(!settings[k]?.pending)settings[k]=v;await putMeta(s,'settings',settings);
+  for(const cp of page.checkpoints||[]){validateCheckpoint(cp.key,cp.value);if(cp.id!==cp.value.id||!Number.isSafeInteger(cp.revision)||cp.revision<1||!Number.isFinite(cp.at)||cp.at<=0||cp.at>Date.now()+86400000)throw Error('INVALID_PAGE');const old=await request(s('checkpoints').get(cp.id));if(old?.pending)for(const row of await request(s('conflicts').getAll()))if(row.type==='checkpoint'&&row.proposal.id===cp.id){row.remote=cp;await request(s('conflicts').put(row));}if(!old?.pending&&(!old||cp.revision>old.revision))await request(s('checkpoints').put({...cp,localRevision:(old?.localRevision||0)+1,pending:null}));}
+  const settings=await getMeta(s,'settings')||{};for(const[k,v]of Object.entries(page.settings||{})){if(!validateSetting(k,v.value)||!Number.isSafeInteger(v.revision)||v.revision<1)throw Error('INVALID_PAGE');if(!settings[k]?.pending)settings[k]=v;}await putMeta(s,'settings',settings);
   await putMeta(s,'cursor',page.nextCursor);await putMeta(s,'watermark',page.watermark);
  });}
  async function snapshot(){const state=await read();return transaction(['snapshots'],'readwrite',async s=>{const all=await request(s('snapshots').getAll());const row={id:Date.now().toString(),schema:3,events:state.events,settings:state.settings,exportedAt:new Date().toISOString()};await request(s('snapshots').put(row));for(const old of all.sort((a,b)=>b.id.localeCompare(a.id)).slice(4))await request(s('snapshots').delete(old.id));return row;});}
- return {db,read,commit,makeEvent,migrate,bindOwner,restore,resolveConflict,acknowledge,receive,snapshot,transaction,close:()=>db.close()};
+ return {db,read,commit,makeEvent,migrate,bindOwner,prepareSettings,rawRecovery,restore,resolveConflict,acknowledge,receive,snapshot,transaction,close:()=>db.close()};
 }

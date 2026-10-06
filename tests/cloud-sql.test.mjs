@@ -55,10 +55,16 @@ test('unknown protocol, malformed events, missing dependencies and future clocks
  for(const op of [{id:newId(),v:2,events:[]},{id:newId(),v:3,events:[{...event,value:{rating:2}}]},{id:newId(),v:3,events:[{...event,at:Date.now()+86400001*2}]},{id:newId(),v:3,events:[{...event,id:null}]}])await assert.rejects(transport.commit(op));
  assert.equal((await transport.pull(0,null)).watermark,2);
 });
+test('independent devices retain real attempts and undo redo never collides with an earlier attempt',async()=>{
+ await as(claims);const a=await openLocalDB('attempt-a-'+newId(),indexedDB),b=await openLocalDB('attempt-b-'+newId(),indexedDB),prefix=newId()+':0:r:initial';
+ const ea=await a.makeEvent('review','word:attempt-fixture',{rating:3},{attemptId:prefix}),eb=await b.makeEvent('review',ea.key,{rating:1},{attemptId:prefix});assert.notEqual(ea.attemptId,eb.attemptId);
+ for(const[writer,event]of [[a,ea],[b,eb]]){const op=await writer.commit({events:[event]});const r=await transport.commit(op);assert.deepEqual(await transport.commit(op),r);await writer.acknowledge(op,r);}
+ const undo=await b.makeEvent('undo',eb.key,{id:eb.id}),redo=await b.makeEvent('review',eb.key,{rating:3},{attemptId:prefix+':'+eb.id});assert.notEqual(redo.attemptId,eb.attemptId);const op=await b.commit({events:[undo,redo]});await transport.commit(op);a.close();b.close();
+});
 test('fixed-watermark pagination cannot omit late committed facts',async()=>{
- await as(claims);const first=await transport.pull(0,null);assert.equal(first.nextCursor,2);
+ await as(claims);const first=await transport.pull(0,null);assert.equal(first.nextCursor,2);const before=await transport.pull(0,null);let cursor=before.nextCursor;const high=before.watermark;while(cursor<high)cursor=(await transport.pull(cursor,high)).nextCursor;
  const event=await local.makeEvent('typing','word:ability',{correct:true});const op=await local.commit({events:[event]});await transport.commit(op);
  const old=await transport.pull(2,2);assert.equal(old.events.length,0);assert.equal(old.watermark,2);
- const fresh=await transport.pull(2,null);assert.equal(fresh.events.length,1);assert.equal(fresh.nextCursor,3);
+ const fresh=await transport.pull(high,null);assert.equal(fresh.events.length,1);assert.equal(fresh.nextCursor,high+1);
  local.close();await db.close();
 });

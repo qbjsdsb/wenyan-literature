@@ -14,7 +14,7 @@ export async function connect(){
  try{
   // Read authorization succeeds before this account can adopt an unbound local history.
   const first=unwrap(await cloud.rpc('wenyan_pull',{p_cursor:0,p_high:null,p_limit:1}));
-  if(first.v!==3)throw Error('UNKNOWN_CLOUD_VERSION');await database.bindOwner(data.user.id);
+  if(first.v!==3)throw Error('UNKNOWN_CLOUD_VERSION');await database.bindOwner(data.user.id);await database.prepareSettings(first.settings||{});
   engine?.stop();engine=new SyncEngine(database,{commit:async op=>unwrap(await cloud.rpc('wenyan_commit',{p_op:op})),pull:async(cursor,high)=>unwrap(await cloud.rpc('wenyan_pull',{p_cursor:cursor,p_high:high,p_limit:100}))},status);
   await syncNow();
  }catch(e){status(e.message==='ACCOUNT_MISMATCH'?'error':'auth',e);}

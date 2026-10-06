@@ -85,7 +85,7 @@
 - 产品配置集中。
 - `word:<id>` key helper 统一。
 - 错词语义统一。
-- scoped localStorage 隔离。
+- main 的 scoped localStorage；#14 测试改为 scoped IndexedDB 隔离。
 - 相对部署路径。
 - 缺失 rank 使用 `null`。
 - 旧 review 不污染首次正确率。
@@ -120,13 +120,13 @@ Smart 首次拼错或使用提示 / 发音提示：本次按 Again，不允许�
 
 输入区内按键按正常英文处理；IME composing 期间不提交、不切词。训练输入区外支持 Space / H / F / M、评分 1 / 2；Esc 暂停；搜索支持 /、↑↓、Enter。动画仅轻淡入和色彩反馈，尊重 reduced-motion。
 
-实施前审计见 [`EXPERIENCE-AUDIT.md`](EXPERIENCE-AUDIT.md)，本轮验收见 [`EXPERIENCE-VALIDATION.md`](EXPERIENCE-VALIDATION.md)。下一步快速筛词，本轮只明确设计与测试方向，不实现新筛词工具。
+实施前审计见 [`EXPERIENCE-AUDIT.md`](EXPERIENCE-AUDIT.md)，本轮验收见 [`EXPERIENCE-VALIDATION.md`](EXPERIENCE-VALIDATION.md)。快速筛词设计保留，实施优先级已后置于云可靠性；#14 不新增筛词工具。
 
 ### 云端续接
 
 main本地英语v1已验收并合入；Smart Session/English Experience v2在Draft #12，最新CI与桌面矩阵成功，尚未合并。到期/错词直接主动回忆，新词先接触后回忆、失败有限回流；不是重造训练器。
 
-#12的运行代码与测试继续在其分支；#13仅研究云端/Auth/MCP，不混入英语实验。本人系统IME、实际语音、20—30分钟及多日反馈仍未验证。
+#12 保留原体验线；#13 保存研究结论；#14 复用 Smart 代码实施 IDB/云基础，不改记忆调度原则。本人系统IME、实际语音、20—30分钟及多日反馈仍未验证。
 
 用户没有正式历史，可在云基础重新审视v2/event/session，保留已经可靠的Smart/FSRS/word ID/首次结果。固定词库继续静态发布，AI不写虚假review，不自动判定已掌握。
 

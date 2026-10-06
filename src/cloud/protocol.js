@@ -10,6 +10,7 @@ export function canonical(value){
 export function assertSame(a,b){if(canonical(a)!==canonical(b))throw Error('ID_CONTENT_CONFLICT');}
 export function validateFacts(events){
  if(!Array.isArray(events)||events.length>100000||events.some(e=>!validEvent(e)||e.kind==='session'))throw Error('INVALID_FACTS');
+ if(events.some(e=>e.version!=null&&(e.version!==3||e.contentVersion!==CONTENT_VERSION||e.schedulerVersion!==SCHEDULER_VERSION)))throw Error('UNKNOWN_FACT_VERSION');
  const seen=new Map();for(const e of events){if(seen.has(e.id))assertSame(seen.get(e.id),e);seen.set(e.id,e);}
 }
 export function validateCheckpoint(key,value){

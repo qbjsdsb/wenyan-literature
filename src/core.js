@@ -6,8 +6,10 @@ export const scheduler = fsrs({enable_fuzz:false});
 export const DAY = 86400000;
 export const kinds = new Set(['review','typing','reading','task','favorite','mastered','undo','session','attempt']);
 export function validEvent(e) {
-  if(!(e && /^[a-zA-Z0-9-]{8,80}$/.test(e.id) && typeof e.device==='string' && e.device.length<=80 && kinds.has(e.kind) && typeof e.key==='string' && e.key.length<=100 && Number.isFinite(e.at) && e.at>0 && e.at<=Date.now()+DAY && e.value && typeof e.value==='object' && !Array.isArray(e.value) && JSON.stringify(e.value).length<=8192))return false;
+  if(!(e && typeof e.id==='string' && /^[a-zA-Z0-9-]{8,80}$/.test(e.id) && typeof e.device==='string' && e.device.length<=80 && kinds.has(e.kind) && typeof e.key==='string' && e.key.length<=100 && Number.isFinite(e.at) && e.at>0 && e.at<=Date.now()+DAY && e.value && typeof e.value==='object' && !Array.isArray(e.value) && JSON.stringify(e.value).length<=8192))return false;
   const v=e.value;
+  if(['review','typing','session'].includes(e.kind)&&['firstCorrect','hinted'].some(k=>Object.hasOwn(v,k)&&typeof v[k]!=='boolean'))return false;
+  if(['favorite','mastered'].includes(e.kind)&&e.previous!=null&&(!Array.isArray(e.previous)||e.previous.length>1000||e.previous.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(id))))return false;
   if(e.kind==='attempt')return ['firstCorrect','hinted'].includes(v.field)&&typeof v.value==='boolean'&&typeof v.sessionId==='string'&&Number.isSafeInteger(v.index)&&v.index>=0;
   if(e.kind==='review')return [1,3].includes(v.rating);
   if(e.kind==='typing')return typeof v.correct==='boolean';
@@ -15,7 +17,7 @@ export function validEvent(e) {
   if(e.kind==='task')return typeof v.done==='boolean';
   if(e.kind==='favorite'||e.kind==='mastered')return typeof v.on==='boolean';
   if(e.kind==='undo')return typeof v.id==='string' && /^[a-zA-Z0-9-]{8,80}$/.test(v.id);
-  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode)&&validSmartPlan(v):typeof v.article==='string');
+  if(e.kind==='session')return ['english','literature'].includes(e.key) && Array.isArray(v.queue) && v.queue.length<=50 && v.queue.every(id=>typeof id==='string'&&id.length<100) && Number.isSafeInteger(v.index) && v.index>=0 && v.index<=v.queue.length && Array.isArray(v.results) && v.results.length<=v.queue.length && v.results.every(r=>r&&typeof r.id==='string'&&[null,1,3].includes(r.rating)&&['firstCorrect','hinted'].every(k=>!Object.hasOwn(r,k)||typeof r[k]==='boolean')) && (e.key==='english'?Object.hasOwn(ENGLISH_MODES,v.mode)&&validSmartPlan(v):typeof v.article==='string');
   return false;
 }
 export function mergeEvents(...lists) {

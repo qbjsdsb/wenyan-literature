@@ -62,6 +62,14 @@ jobs:
           WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
           WENYAN_DEPLOYMENT: subpath
         run: node tests/experience-smoke.mjs
+      - name: Offline reopen and storage failure at root
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4173/
+        run: node tests/offline-smoke.mjs
+      - name: Offline reopen and storage failure at subpath
+        env:
+          WENYAN_BASE_URL: http://127.0.0.1:4174/desktop/
+        run: node tests/offline-smoke.mjs
       - name: Checkout current main for visual comparison
         uses: actions/checkout@v7
         with:

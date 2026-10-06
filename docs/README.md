@@ -15,11 +15,11 @@
 
 ## 当前基线与研究入口
 
-main为桌面英语v1；#12是未合并的Smart Session/Experience v2；#13是独立云端与MCP研究Draft。旧#2—#10不续接，#1文学审计冻结。接手读取实时main/PR/CI，不把文档SHA当永久head。
+main为桌面英语v1；#12是未合并的Smart Session/Experience v2；#13是独立云端与MCP研究 Draft，#14 是整合 Smart/研究的云基础实施。旧#2—#10不续接，#1文学审计冻结。接手读取实时main/PR/CI，不把文档SHA当永久head。
 
 新增研究入口：[research/CLOUD-MCP.md](research/CLOUD-MCP.md)。保存方案比较、官方依据、同步/身份/MCP未知门槛与风险；不是第二份进度表。架构图在ARCHITECTURE，路线/验收在ROADMAP。
 
-当前方向：Desktop-first、English-first；云长期事实与本地即时响应；ChatGPT可更换推理层。云端/Auth/MCP尚未实现，文学/手机专项冻结。
+当前方向：Desktop-first、English-first；云长期事实与本地即时响应；ChatGPT可更换推理层。IDB/RPC/Auth UI/薄同步代码在 #14，托管 Auth/云同步尚未实测；MCP 尚未开放，文学/手机专项冻结。
 
 ## 文档分类
 

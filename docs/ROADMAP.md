@@ -1,6 +1,6 @@
 # Wenyan 路线图
 
-Desktop-first、English-first，文学冻结。路线按真实学习闭环推进；不以功能数量衡量。当前完成事实见[开发进度](开发进度.md)，理由见[研究](research/CLOUD-MCP.md)，稳定职责见[ARCHITECTURE](ARCHITECTURE.md)。本轮只研究，不自动部署/合并。
+Desktop-first、English-first，文学冻结。路线按真实学习闭环推进；不以功能数量衡量。当前完成事实见[开发进度](开发进度.md)，理由见[研究](research/CLOUD-MCP.md)，稳定职责见[ARCHITECTURE](ARCHITECTURE.md)。当前在 #14 实施；不自动合并。正式部署在云验收后推进，代码准备不代表已上线。
 
 ## S0 — 英语体验收口
 
@@ -9,13 +9,13 @@ Desktop-first、English-first，文学冻结。路线按真实学习闭环推进
 - 验收已有输入/首次结果/提示/订正/有限回流/Undo/刷新/JSON与三桌面尺寸/根和子路径。
 - 本人IME/实际声音/连续20—30分钟与多日反馈仍属未验证；不能由远端浏览器代替。
 - 快速筛词是可独立的小功能，复用人工mastered，无硬编码黑名单；不要求先筛完才能做云基础。
-- 合并#12、部署都等待独立授权，不由本轮研究自动触发。
+- #12 保持 Draft、自动验收 ready；#14 整合其领域代码实施云基础。遵守不自动合并；正式部署按本轮授权与实际验收推进。
 
 ## S1 — Supabase Foundation与本地协议
 
 目标：在正式积累历史前确定薄数据边界，不一次搭大后端。
 
-- 独立Wenyan项目，一owner，关闭注册/anonymous；受保护首次登录。
+- 使用已获授权的弃用项目，Wenyan 独立 private schema、一 owner，关闭注册/anonymous；受保护首次登录。
 - Git保存config/migrations/类型/假数据，不保存secret或真实学习历史。
 - v3事实/checkpoint/backup版本，IDB事务/outbox；保留word ID、Smart领域逻辑、固定ts-fsrs/参数epoch。
 - 原v2仅导入适配；实施前检查是否新增真实数据，不能静默清空。
@@ -93,6 +93,6 @@ Auth窄验证失败：保留可靠云同步，暂不开放MCP；不以无认证/
 
 ## 用户参与边界
 
-Work完成普通研究、命名、SQL/migrations、测试、部署准备与PR。本人仅在独立项目/成本与组织选择、首次秘密输入/登录、必要服务授权、正式部署授权、插件安装风险/OAuth、付费节点参与；每次给一个最小操作。不让本人写SQL、复制代码、部署函数。
+Work完成普通研究、命名、SQL/migrations、测试、部署准备与PR。本人已授权复用所有弃用项目；仅在涉及费用的项目/组织选择、首次秘密输入/登录、必要服务授权、正式部署授权、插件安装风险/OAuth、付费节点参与；每次给一个最小操作。不让本人写SQL、复制代码、部署函数。
 
 明确不做：多人SaaS、权限后台、手机专项、框架重写、微服务、Docker生产体系、复杂CQRS/事件溯源框架、自建OAuth、通用repository/DI、批量AI例句、聊天替代数据库。

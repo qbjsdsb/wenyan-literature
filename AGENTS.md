@@ -144,7 +144,7 @@ AI 不是知识来源，只能帮助整理、压缩、关联和表达。
 
 2026-10-07用户明确下一阶段需要长期云端事实、多电脑同步和ChatGPT集成，并确认尚无正式学习历史。旧“同步仅真实需求后可选”路线已被替代，详见ROADMAP；schema 2/localStorage键不是永久协议。
 
-当前运行代码仍为v2；本轮研究不改协议。实施云基础前重新检查是否已经开始积累真实数据，若有则备份迁移。新协议分事实/checkpoint/投影/静态内容，保留word ID、Smart首次结果/hinted、FSRS与备份，不长期双写旧协议。
+main 仍为 v2；实施分支 #14 已引入 IDB/JSON v3 与一次旧协议导入。继续工作前核对是否开始积累真实数据，若有则备份迁移。新协议分事实/checkpoint/投影/静态内容，保留word ID、Smart首次结果/hinted、FSRS与备份，不长期双写旧协议。
 
 不把AI判断写成review，不让AI直接改card/due/算法或删除历史。MCP首版只读，RLS/RPC与client权限也必须只读，不用管理员key绕过。Auth使用单一owner，不建设商业注册/用户中心。
 
@@ -177,7 +177,7 @@ main已合入Desktop English Baseline v1；接手核对实时head，旧PR #2—#
 
 PR #11 已合入 main，旧 #2—#10 已关闭；#12 已通过自动验收、仍为 Draft，不自动合并。
 
-English Experience v2/Smart Session在独立Draft #12；云端/MCP研究在独立Draft #13（chore/cloud-mcp-architecture，基于main）。不要覆盖或自动合并任一PR。#12已验证的领域逻辑应复用，但不能描述成main已实现。
+English Experience v2/Smart Session在独立Draft #12；云端/MCP研究在独立Draft #13（chore/cloud-mcp-architecture，基于main）。#14 feature/cloud-foundation-v1 已语义整合两者，云实施在此续接。不要覆盖或自动合并任一 PR；不能描述成 main 已实现。用户已授权复用所有弃用 Supabase 项目，不再要求普通项目选择确认；费用与秘密输入仍需本人。
 
 每完成有意义的小阶段提交到远端，保持Draft PR body真实：已完成、当前状态、验证、未完成、blocker、next action。Work临时目录不是恢复点。状态只改docs/开发进度.md，不另建handoff/final/最新进度文件。
 

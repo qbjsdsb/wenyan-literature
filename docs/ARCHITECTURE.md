@@ -12,7 +12,9 @@ main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Sma
 | src/content.js | 冻结的文学样本 |
 | english/catalog.js、config.js、keys.js、fallback.js、lexicon.js | 固定词库/分层/ID/兼容/enrichment |
 | english/queue.js、session.js、events.js、status.js、stats.js | 选词、续学、错误语义、状态和统计 |
-| core.js、storage.js、backup.js | 事件校验、FSRS、整包本地保存、多标签合并、JSON |
+| core.js、storage.js、backup.js | 事件校验、FSRS、IDB facade、多标签通知/CAS、JSON |
+| cloud/local-db.js、protocol.js、sync.js、client.js | 本地事务、版本、幂等 outbox、owner Auth 与后台同步 |
+| supabase/migrations、config.toml | 私有事实/checkpoint/收据/CAS；托管实例状态另见 SSOT |
 | public/data/english、scripts/sync-english-* | 固定内容与确定性生成，不是个人状态 |
 | tests、evidence、legacy | 关键行为/验收证据/历史保留，不存个人学习数据 |
 
@@ -20,7 +22,7 @@ main 仍是原本地 v1。实施分支 feature/cloud-foundation-v1 已整合 Sma
 
 English Experience v2 / Smart Session在Draft #12。新词e接触→稍后r回忆；到期/错词直接r；失败最多一次x回流，hinted/首次失败不能按Good。
 
-`english/smart.js`负责计划/完成/Undo/组反馈；session.js校验optional smart:1和紧凑steps。queue/index/results/current.phase仍用schema 2；50步/8192字符限制未扩大。
+`english/smart.js`负责计划/完成/Undo/组反馈；session.js校验optional smart:1和紧凑steps。复用 queue/index/results/current.phase 领域形状；JSON 包与存储协议升级为 v3，50步/8192字符限制未扩大。
 
 词库通过明确initializeVocabulary/getVocabularyState/changeEnglishLayer等接口载入，app.js一次渲染，#12移除MutationObserver与session全局业务hook。main仍有旧装饰层，不能把#12的结构描述成main已实现。
 
@@ -53,13 +55,13 @@ flowchart TD
 - **可重建投影**：FSRS card/due、错词、日统计；云与本地用同一版本纯规则，投影带输入水位/算法参数版本。
 - **固定内容**：5528稳定词库、ECDICT和许可继续随应用发布。内容版本绑定session；缺内容时保留组，不换答案。
 
-首期三领域表为study_events/study_sessions/learner_settings；非事件提交可增加小sync_receipts表，word_state仅为以后按需cache候选；SQL字段在实施时按验收冻结，不现在建Learner Model、题库或通用活动平台。
+已实现三领域表 study_events/study_sessions/learner_settings；增加 config、sync_receipts、session_forks 处理唯一身份/幂等/冲突；word_state仅为以后按需cache候选；SQL字段在实施时按验收冻结，不现在建Learner Model、题库或通用活动平台。
 
 ## 4. 稳定领域语义与版本
 
 必须保留：word:<规范化ID>、首次正确/错误与hinted不可被订正覆盖、接触不算review、错误/提示后的Smart评分、有限回流、Undo、刷新续学、内容许可、JSON恢复。
 
-`wenyan-events-v2`与schema 2是当前实现，**不是永久协议**。用户尚无正式历史，允许有理由的一次云基础升级。实施分支已经引入一次 v2 导入适配，保留原 localStorage 与稳定 ID，不长期双写。JSON v3 保留事实与续学，旧 v2 可读。具体协议和验收见 [cloud-implementation](cloud-implementation.md)。
+`wenyan-events-v2` 与 schema 2 是 main 的旧实现，**不是永久协议**。用户尚无正式历史，允许有理由的一次云基础升级。实施分支已经引入一次 v2 导入适配，保留原 localStorage 与稳定 ID，不长期双写。JSON v3 保留事实与续学，旧 v2 可读。具体协议和验收见 [cloud-implementation](cloud-implementation.md)。
 
 版本各司其职：event version、checkpoint version、backup version、content version、scheduler version/parameter epoch。升级算法独立验收；旧客户端不能降级新云数据。未观测字段unknown，不编造时长/错误拼写。
 
@@ -69,9 +71,9 @@ flowchart TD
 - stable event/attempt ID与同内容收据使重试幂等；r/x不同attempt。相同ID不同内容拒绝，不任意覆盖。
 - 云短事务提交事实/checkpoint/幂等收据后ack；outbox只有ack后移除。共享JS/ts-fsrs从已提交事实派生FSRS，不在SQL重写算法，不接收浏览器card；MCP只读也不维护card的写权限。
 - owner序列化提交生成已提交事实游标；不能用客户端时间或未提交序列最大值。固定水位分页，落盘后推进cursor。
-- 设置/可续学session每次取少量当前快照，独立revision；不预造全表changefeed。非事件重试先查持久提交收据再CAS，收据在操作仍未确认时不可过期。
-- 默认单活跃session写者。CAS+writer generation；并发旧writer保存fork，事实并集，绝不按updated_at覆盖整组。
-- FSRS按固定合法发生时间/设备ordinal/ID重放，晚到影响的词重算；大时钟漂移隔离，received_at只审计。
+- 设置/可续学 session 每次取当前快照，独立 revision；恢复点整份原子导入。冲突由本人选择云端位置或本机另存新组，并发 mastered 保守保留复习、收藏保留可见性；不预造全表changefeed。非事件重试先查持久提交收据再CAS，收据在操作仍未确认时不可过期。
+- 默认单活跃session写者。本机 revision CAS、云 baseRevision/baseOperation CAS；并发旧writer保存fork，事实并集，绝不按updated_at覆盖整组。
+- FSRS按固定合法发生时间/设备ordinal/ID重放，晚到影响的词重算；received_at 只审计。目前有效时间保证同设备单调、超一天未来事件拒绝；大漂移隔离/恢复仍是上线前待实施验收项，不能改旧事实掩盖错误。
 - 启动/focus/online/短批flush/组完成同步；401暂停上传；关闭前尽力不是数据保障。
 - IDB/outbox解决断网继续；Service Worker静态缓存另解决断网重开。只缓存版本化应用/内容，不缓存Auth/个人API，不在训练途中激活新版本。
 

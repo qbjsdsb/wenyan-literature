@@ -41,3 +41,12 @@ npm run build
 本机保留五份轮转快照，设置里可查看与合并恢复点，并有 JSON 人工备份。私密异地自动备份、托管恢复演练及真正固定 HTTPS 入口仍须在部署阶段完成，不能声称同步等于备份。
 
 回滚原则：不退回只写 localStorage 的旧构建。代码回滚须继续支持 v3 数据读取；停云后本机可学。迁移初始 config.owner_id=null，默认全拒绝，只有由管理面绑定本人的 Auth UUID 才可写。
+
+
+## 部署准备（未执行）
+
+`.github/workflows/deploy-pages.yml` 只允许 workflow_dispatch，不由 Draft push 发布。依照 [GitHub 官方 custom workflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) 配置 Pages；配置需通过正常 Git 审查收入默认分支后才可从 Actions 手动触发，不自动合并。仓库 variables 仅放 `VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY` 和真实云验收后才设置的 `WENYAN_CLOUD_READY=true`。
+
+管理面启用 Pages、固定实际 HTTPS origin、Auth site URL/精确 callback、禁用托管注册/匿名、绑定 owner 和真实安全验收均由 Work 在登录后完成。构建拒绝 secret/service_role browser key；不使用管理员 token 部署前端。rollback 选可读写 v3 的旧构建，不能退回 main 的 v2 writer。未来 MCP consent/受保护资源 discovery 需另做真实验证，当前没有 mock Plugin 成功。
+
+目前大时钟漂移隔离/恢复尚未完成：不要手改事实时间强行清空 outbox。SQL 的 received_at 保留服务器接收审计，未来时间超一天拒绝，本机 effective at 保证同设备单调。托管验收必须包含系统时间向前/向后改变、重开与多设备迟到重放。

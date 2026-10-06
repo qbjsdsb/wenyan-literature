@@ -49,12 +49,12 @@ let autoVoice=local.getItem('wenyan-voice')==='on';
 const savedEnglishMode=local.getItem(ENGLISH_STORAGE_KEYS.mode);
 let currentRead=null,mode=Object.hasOwn(ENGLISH_MODES,savedEnglishMode)?savedEnglishMode:DEFAULT_ENGLISH_MODE,wordFilter='all';
 let phase='input',typed='',hinted=false,audioPlayed=false,paused=false,composing=false,busy=false,lastEvent=null;
-let session=latest(store.events,'session','english')||loadJSON(ENGLISH_STORAGE_KEYS.session,null),litSession=latest(store.events,'session','literature')||loadJSON('wenyan-lit-session',null),litShown=false,litHint=false;
+let session=latest(store.events,'session','english')||null,litSession=latest(store.events,'session','literature')||null,litShown=false,litHint=false;
+lastEvent=store.facts.find(e=>e.id===session?.results?.at(-1)?.eventId)||null;
 let timer=null,readTimer=null,backupUrl=null;
 let newWordLimit=Number(store.settings.newWordLimit?.value||local.getItem('wenyan-english-new-limit'))||DEFAULT_ENGLISH_NEW_WORD_LIMIT;
 if(!ENGLISH_NEW_WORD_LIMITS.includes(newWordLimit))newWordLimit=DEFAULT_ENGLISH_NEW_WORD_LIMIT;
 let panelReturnFocus=null;
-function loadJSON(key,fallback){try{return JSON.parse(local.getItem(key))||fallback;}catch{return fallback;}}
 function preference(key,value){try{local.setItem(key,value);}catch{toast('设置未能保存到本机');}}
 async function persistSession(){if(session)await record('session','english',session);}
 async function persistLit(){if(litSession)await record('session','literature',litSession);}
@@ -201,7 +201,7 @@ async function submitWord(){
 }
 async function advanceWord(rating){
  const id=session.queue[session.index],descriptor=englishStepEvent(session,rating);
- const event=await createEvent(descriptor.kind,wordKey(id),descriptor.value,{sessionId:session.id,attemptId:session.id+':'+session.index+':'+(stepKind(session)||session.mode)});
+ const event=await createEvent(descriptor.kind,wordKey(id),descriptor.value,{sessionId:session.id,attemptId:session.id+':'+session.index+':'+(stepKind(session)||session.mode)+':'+(session.current?.redoOf||'initial')});
  const next=completeEnglishStep(session,event);await commitLearning([event],next);lastEvent=event;session=next;render();
 }
 async function persistHint(){hinted=true;session=markEnglishSessionHinted(session);await persistSession();}
@@ -267,13 +267,13 @@ function wordDetail(id){
 }
 
 function exportRecords(){
- const text=JSON.stringify({...exportState(store.events),settings:store.settings,...(store.problem?{unreadableOriginal:store.rawRecords}:{})},null,2);
+ const text=JSON.stringify({...exportState(store.events),settings:store.settings,...(store.problem?{unreadableOriginal:store.rawRecords,unreadableLegacySessions:store.legacySessions,...(store.rawRecovery?{unreadableIndexedDB:store.rawRecovery}:{})}:{})},null,2);
  openPanel(`<h2>导出备份</h2><a id="backup-download" class="button primary">下载备份文件</a><details><summary>下载不可用时，复制备份文字</summary><label for="backup-text">完整备份</label><textarea id="backup-text" readonly rows="8" style="width:100%">${esc(text)}</textarea></details><p class="source-note">包含已完成记录、复习安排和续学位置。请妥善保存。</p>`);
  backupUrl=URL.createObjectURL(new Blob([text],{type:'application/json'}));$('#backup-download').href=backupUrl;$('#backup-download').download='Wenyan-学习记录-'+localDay()+'.json';
 }
 async function importBackup(data){const merged=importEvents(data,store.events);if(!await save(merged,data.settings||{})){toast('未能保存导入记录，请导出当前备份后重试');return;}window.dispatchEvent(new Event('wenyan-remote'));toast('记录已合并，已有训练组保留当前进度');panel.close();window.dispatchEvent(new Event('wenyan-remote'));render();}
 const actions={
- 'task':el=>toggleTask(el.dataset.id),'five-minutes':async()=>{litSession=null;go('recall/narrative/perspective');}, 'undo':async()=>{if(!lastEvent)return;const previous=lastEvent,id=previous.id;const undo=await createEvent('undo',previous.key,{id});if(session?.results.at(-1)?.eventId===id){const next=undoEnglishStep(session,id);await commitLearning([undo],next);session=next;lastEvent=null;go('train');}else{await commitLearning([undo]);lastEvent=null;render();}toast('已撤销，复习安排已恢复');},
+ 'task':el=>toggleTask(el.dataset.id),'five-minutes':async()=>{litSession=null;go('recall/narrative/perspective');}, 'undo':async()=>{if(!lastEvent)return;const previous=lastEvent,id=previous.id;const undo=await createEvent('undo',previous.key,{id});if(session?.results?.at(-1)?.eventId===id){const next=undoEnglishStep(session,id);next.current={...next.current,redoOf:id};await commitLearning([undo],next);session=next;lastEvent=null;go('train');}else{await commitLearning([undo]);lastEvent=null;render();}toast('已撤销，复习安排已恢复');},
  'finish-reading':async()=>{recordTaskOnce(currentRead?.article==='avant-garde'?'contemporary':'reading');toast('阅读已完成');go('today');},'return-read':async()=>{const r=currentRead||resume();go(`read/${r.article}/${r.section}`);},
  'outline-toggle':async()=>{$('#outline').hidden=!$('#outline').hidden;if(!$('#outline').hidden)$('#outline').focus();},'lit-new':async()=>{litStart(litSession.article);render();},'lit-show':showLit,'lit-rate':el=>rateLit(Number(el.dataset.rating)),'lit-retry':async()=>{litSession={...litSession,queue:litSession.results.filter(r=>r.rating===1).map(r=>r.id),index:0,results:[]};await persistLit();render();},
  'mode':async el=>{mode=el.dataset.mode;preference(ENGLISH_STORAGE_KEYS.mode,mode);document.querySelectorAll('[data-action="mode"]').forEach(button=>{button.classList.toggle('active',button.dataset.mode===mode);button.setAttribute('aria-pressed',button.dataset.mode===mode);});$('.mode-description').textContent=englishModeDescription(mode)+(mode==='follow'?' 跟打只记录拼写练习。':' 自评会用于安排复习。');const start=$('[data-action="start-words"]');if(start)start.textContent='开始'+englishModeLabel(mode);},'word-filter':async el=>{wordFilter=el.dataset.filter;english();},'start-smart':startSmart,'start-words':startWords,'resume-words':()=>{adoptCheckpoint(session?.id);go('train');},
@@ -290,14 +290,13 @@ async function mutate(fn){if(mutationPending)return;mutationPending=true;app.set
 for(const name of Object.keys(actions)){const action=actions[name];actions[name]=el=>mutate(()=>action(el));}
 document.addEventListener('click',e=>{if(e.target.closest('.skip-link')){e.preventDefault();$('#main').focus();return;}const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions[el.dataset.action]?.(el);}if(e.target.closest('#panel a[href^="#"]'))panel.close();});
 document.addEventListener('submit',async e=>{if(e.target.id!=='cloud-login-form')return;e.preventDefault();const form=e.target;const message=$('#login-message');try{await login(form.elements.email.value,form.elements.password.value);form.elements.password.value='';settings();}catch{form.elements.password.value='';message.textContent='暂时未能登录，请核对账号或稍后重试。';}});
-document.addEventListener('change',async e=>{
- const el=e.target;
- if(el.id==='vocab-layer'){changeEnglishLayer(el.value);await setLearningSetting('layer',el.value);if($('.learning-options')){$('.learning-options').open=true;$('#vocab-layer').focus();}return;}
- if(el.id==='new-limit'){newWordLimit=Number(el.value);preference('wenyan-english-new-limit',newWordLimit);english();$('.learning-options').open=true;$('#new-limit').focus();await setLearningSetting('newWordLimit',newWordLimit);return;}
+document.addEventListener('change',e=>{const el=e.target,selectedValue=el.value;void mutate(async()=>{
+ if(el.id==='vocab-layer'){el.disabled=true;await setLearningSetting('layer',selectedValue);changeEnglishLayer(selectedValue);if($('#vocab-layer'))$('#vocab-layer').disabled=false;if($('.learning-options')){$('.learning-options').open=true;$('#vocab-layer').focus();}return;}
+ if(el.id==='new-limit'){el.disabled=true;await setLearningSetting('newWordLimit',Number(selectedValue));newWordLimit=Number(selectedValue);preference('wenyan-english-new-limit',newWordLimit);english();$('.learning-options').open=true;$('#new-limit').focus();return;}
  if(el.id==='theme'){theme=el.value;preference('wenyan-theme',theme);applyTheme();}if(el.id==='voice'){autoVoice=el.checked;preference('wenyan-voice',autoVoice?'on':'off');}
  if(el.id==='reading-family'){readingFamily=el.value;preference('wenyan-reading-family',readingFamily);applyTheme();}if(el.id==='line-height'){lineHeight=Number(el.value);preference('wenyan-line-height',lineHeight);applyTheme();}
  if(el.id==='import-file'){try{const f=el.files[0];if(!f||f.size>8*1024*1024)throw Error();const data=JSON.parse(await f.text());await importBackup(data);}catch{toast('备份格式不正确，未修改当前记录');}}
-});
+});});
 document.addEventListener('input',e=>{if(e.target.id==='font-size'){readingSize=Number(e.target.value);preference('wenyan-font-size',readingSize);$('#size-label').textContent=readingSize+'px';applyTheme();}});
 document.addEventListener('keydown',e=>{
  if(e.isComposing||composing||e.keyCode===229||e.ctrlKey||e.metaKey||e.altKey)return;
@@ -341,8 +340,8 @@ window.addEventListener('wenyan-remote',()=>{
  const syncedLayer=store.settings.layer?.value;if(syncedLayer&&syncedLayer!==getVocabularyState().layer)changeEnglishLayer(syncedLayer);
 
  const remoteSession=latest(store.events,'session','english'),remoteLit=latest(store.events,'session','literature');
- if(route()[0]!=='train'&&remoteSession){session=structuredClone(remoteSession);adoptCheckpoint(session.id);preference('wenyan-session',JSON.stringify(session));}
- if(route()[0]!=='recall'&&remoteLit){litSession=structuredClone(remoteLit);preference('wenyan-lit-session',JSON.stringify(litSession));}
+ if(route()[0]!=='train'&&remoteSession){session=structuredClone(remoteSession);adoptCheckpoint(session.id);}
+ if(route()[0]!=='recall'&&remoteLit){litSession=structuredClone(remoteLit);}
 
  if(route()[0]==='read'){const remote=resume();if(JSON.stringify(remote)!==JSON.stringify(currentRead))$('#remote-position').innerHTML=`<div class="position-notice">另一个页面更新了阅读位置 ${btn('remote-keep','继续本机','text-button')}${btn('remote-use','查看更新位置','text-button')}</div>`;}
  else if(['today','english','literature','training'].includes(route()[0]))render();

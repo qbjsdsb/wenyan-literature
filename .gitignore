@@ -24,3 +24,8 @@ build/
 .sites-runtime/
 .env*
 !.env.example
+
+# 浏览器临时证据 / CLI 本机状态，不含远端恢复源
+browser-evidence/
+supabase/.temp/
+supabase/.branches/

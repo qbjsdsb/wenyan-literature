@@ -1,0 +1,51 @@
+name: deploy-wenyan-pages
+# Deliberately manual. A Draft push cannot publish an unvalidated cloud setup.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wenyan-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require verified hosted cloud configuration
+        env:
+          READY: ${{ vars.WENYAN_CLOUD_READY }}
+          CLOUD_URL: ${{ vars.VITE_SUPABASE_URL }}
+          CLOUD_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          test "$READY" = true
+          test -n "$CLOUD_URL"
+          test -n "$CLOUD_KEY"
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

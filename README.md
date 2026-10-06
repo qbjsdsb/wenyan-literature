@@ -45,7 +45,7 @@
 - 当前学习状态、复习次数、下次复习。
 - 今日新学、主动复习、当前到期、首次正确率、拼写错误。
 
-统计直接从 `wenyan-events-v2` 派生，不维护第二套统计数据库。
+main 从 v2 本地事件派生统计；本实施分支从 IndexedDB 事实重建，仍没有第二套统计数据库。
 
 ### 备份
 - JSON 导出 / 导入。
@@ -79,7 +79,7 @@ Baseline 历史证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.
 
 [Draft PR #13](https://github.com/qbjsdsb/wenyan-literature/pull/13) 只研究下一阶段：**静态Wenyan + IndexedDB本地即时保存 + Supabase长期事实/Auth + 只读Wenyan MCP + ChatGPT推理**。没有实现云端、安装插件或发布。
 
-本实施分支整合 #12 的已验证 Smart 代码与 #13 的云架构研究，保持 main 不变。快速筛词后置于云可靠性；不重写英语 UX。
+[Draft PR #14](https://github.com/qbjsdsb/wenyan-literature/pull/14) 整合 #12 的 Smart 代码与 #13 研究，已实现 IndexedDB 原子学习、outbox、JSON v3/恢复点、Supabase 私有 schema/RPC、Auth UI 与薄同步。main 保持不变。云 migration 尚未应用，正式部署、MCP 与 Plugin 还未完成；快速筛词后置，不重写英语 UX。
 
 用户尚未开始正式使用，没有需要迁移的真实学习历史。schema 2不作为永久协议；云基础允许有理由的一次升级，保留Smart Session、FSRS、稳定word ID、首次结果与JSON备份。
 
@@ -97,11 +97,11 @@ Baseline 历史证据见 [`docs/english/VALIDATION.md`](docs/english/VALIDATION.
 6. [`docs/english/VALIDATION.md`](docs/english/VALIDATION.md)
 7. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-新工作先核对远端 `main` 与进行中的 #12 / #13；两者独立，不粗暴覆盖。不要从 PR #2—#10 旧链续接。
+新工作先核对远端 `main` 与 #12 / #13 / #14；云实施继续 #14，共享文档按实际实现语义合并，不粗暴覆盖。不要从 PR #2—#10 旧链续接。
 
 ## 运行
 
-Node.js 24+ 只用于开发 / 构建；应用本身仍是 HTML + CSS + Vanilla JavaScript，没有 Node 业务后端或账号系统。
+Node.js 24+ 只用于开发 / 构建；应用本身仍是 HTML + CSS + Vanilla JavaScript，没有 Node 业务后端、公众注册或账号中心。
 
 ```bash
 npm ci
@@ -117,7 +117,7 @@ npm run build
 
 ## 数据保存
 
-个人学习状态当前保存在浏览器 localStorage，核心事件键为 `wenyan-events-v2`。
+main 仍使用 localStorage v2；本实施分支使用 IndexedDB v3，事实、checkpoint 与 outbox 同一事务保存。旧 `wenyan-events-v2` 与 v1 偏好 session 只作一次迁移源，原值保留。
 
 当前运行版保护的边界（下一阶段存储协议可按明确设计升级）：
 - 稳定事件 ID。
@@ -128,7 +128,7 @@ npm run build
 - JSON 备份兼容。
 - `ts-fsrs` 历史。
 
-每次学习动作先写本机。JSON导入/导出长期保留。下一阶段云权威与本地outbox尚未实现；不把“本机已存”称为“已同步”。真实学习数据与secret不进入公共Git。
+学习完成/Undo 事务成功后才推进；网络失败保留 outbox。JSON v3 整份原子导入、旧 v2 可读，五份本机恢复点可在设置里使用。版本化静态缓存支持断网重开。托管云同步仍等待 Supabase 登录与真实验收，不把“本机已存”称为“已同步”。真实学习数据与 secret 不进入公共 Git。协议与验收见 [cloud-implementation](docs/cloud-implementation.md)。
 
 ## 第三方数据
 
